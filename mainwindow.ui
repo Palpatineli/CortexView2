@@ -1,24 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow" >
-  <property name="geometry" >
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="enabled">
+   <bool>false</bool>
+  </property>
+  <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>300</height>
+    <width>512</width>
+    <height>572</height>
    </rect>
   </property>
-  <property name="windowTitle" >
-   <string>MainWindow</string>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
   </property>
-  <widget class="QMenuBar" name="menuBar" />
-  <widget class="QToolBar" name="mainToolBar" />
-  <widget class="QWidget" name="centralWidget" />
-  <widget class="QStatusBar" name="statusBar" />
+  <property name="windowTitle">
+   <string>CortexView 2</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="icons.qrc">
+    <normaloff>:/new/icon/img/icon-cortex-view.png</normaloff>:/new/icon/img/icon-cortex-view.png</iconset>
+  </property>
+  <widget class="QWidget" name="centralWidget">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <widget class="QWidget" name="controlPanel" native="true">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>512</y>
+      <width>512</width>
+      <height>60</height>
+     </rect>
+    </property>
+    <widget class="QPushButton" name="recordButton">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>40</width>
+       <height>40</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Start/End recording session</string>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+     <property name="icon">
+      <iconset resource="icons.qrc">
+       <normaloff>:/new/icon/img/icon-record-alt.png</normaloff>
+       <normalon>:/new/icon/img/icon-record-inactive.png</normalon>
+       <activeon>:/new/icon/img/icon-stop-inactive.png</activeon>
+       <selectedon>:/new/icon/img/icon-record-alt.png</selectedon>:/new/icon/img/icon-record-alt.png</iconset>
+     </property>
+     <property name="iconSize">
+      <size>
+       <width>32</width>
+       <height>32</height>
+      </size>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="resetROIButton">
+     <property name="geometry">
+      <rect>
+       <x>110</x>
+       <y>10</y>
+       <width>40</width>
+       <height>40</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Reset ROI to full screen</string>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+     <property name="icon">
+      <iconset>
+       <normalon>:/new/icon/img/icon-reset-roi.png</normalon>
+      </iconset>
+     </property>
+     <property name="iconSize">
+      <size>
+       <width>32</width>
+       <height>32</height>
+      </size>
+     </property>
+    </widget>
+    <widget class="QProgressBar" name="progressBar">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>14</y>
+       <width>292</width>
+       <height>12</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Recording Progress</string>
+     </property>
+     <property name="value">
+      <number>0</number>
+     </property>
+     <property name="textVisible">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QProgressBar" name="temperatureBar">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>34</y>
+       <width>292</width>
+       <height>12</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Camera Temperature</string>
+     </property>
+     <property name="value">
+      <number>24</number>
+     </property>
+     <property name="format">
+      <string>%p °C</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="histogramToggle">
+     <property name="geometry">
+      <rect>
+       <x>160</x>
+       <y>10</y>
+       <width>40</width>
+       <height>40</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Show/Hide histogram</string>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+     <property name="icon">
+      <iconset>
+       <normalon>:/new/icon/img/icon-show-histogram-inactive.png</normalon>
+       <activeon>:/new/icon/img/icon-show-histogram.png</activeon>
+      </iconset>
+     </property>
+     <property name="iconSize">
+      <size>
+       <width>32</width>
+       <height>32</height>
+      </size>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="cameraButton">
+     <property name="geometry">
+      <rect>
+       <x>60</x>
+       <y>10</y>
+       <width>40</width>
+       <height>40</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Take still image</string>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+     <property name="icon">
+      <iconset resource="icons.qrc">
+       <normaloff>:/new/icon/img/icon-take-still.png</normaloff>:/new/icon/img/icon-take-still.png</iconset>
+     </property>
+     <property name="iconSize">
+      <size>
+       <width>32</width>
+       <height>32</height>
+      </size>
+     </property>
+    </widget>
+   </widget>
+   <widget class="CameraView" name="cameraView" native="true">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>512</width>
+      <height>512</height>
+     </rect>
+    </property>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
+    </property>
+   </widget>
+  </widget>
  </widget>
- <layoutDefault spacing="6" margin="11" />
- <pixmapfunction></pixmapfunction>
- <resources/>
+ <layoutdefault spacing="6" margin="11"/>
+ <customwidgets>
+  <customwidget>
+   <class>CameraView</class>
+   <extends>QWidget</extends>
+   <header>cameraview.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources>
+  <include location="icons.qrc"/>
+ </resources>
  <connections/>
 </ui>

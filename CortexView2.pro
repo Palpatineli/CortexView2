@@ -13,8 +13,40 @@ TEMPLATE = app
 
 
 SOURCES += main.cpp\
-        mainwindow.cpp
+        mainwindow.cpp \
+    sessiondialog.cpp \
+    camera.cpp \
+    saveworker.cpp \
+    recordparams.cpp \
+    cameraview.cpp \
+    onlineprocessor.cpp \
+    nidaqbox.cpp
 
-HEADERS  += mainwindow.h
+HEADERS  += mainwindow.h \
+    sessiondialog.h \
+    camera.h \
+    saveworker.h \
+    recordparams.h \
+    cameraview.h \
+    onlineprocessor.h \
+    nidaqbox.h
 
-FORMS    += mainwindow.ui
+FORMS    += mainwindow.ui \
+    sessiondialog.ui
+
+RESOURCES += \
+    icons.qrc
+
+unix: INCLUDEPATH += "/home/palpatine/Documents/specs/PvcamSDK/Inc"
+
+win32:INCLUDEPATH += "C:\Program Files (x86)\National Instruments\Shared\ExternalCompilerSupport\C\include"
+unix:INCLUDEPATH += "/home/palpatine/Documents/specs/National Instruments/"
+
+win32:LIBS += "C:\Program Files (x86)\National Instruments\Shared\ExternalCompilerSupport\C\lib64\msvc\NIDAQmx.lib"
+
+DISTFILES += \
+    README.txt
+
+RC_FILE = appicon.rc
+
+CONFIG += c++11

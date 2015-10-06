@@ -1,2 +1,17 @@
-<RCC/>
-
+<RCC>
+    <qresource prefix="/new/icon">
+        <file>img/icon-record-active.png</file>
+        <file>img/icon-stop-disabled.png</file>
+        <file>img/icon-stop-inactive.png</file>
+        <file>img/icon-reset-roi.png</file>
+        <file>img/icon-highlight-overexposure.png</file>
+        <file>img/icon-show-histogram.png</file>
+        <file>img/icon-highlight-overexposure-inactive.png</file>
+        <file>img/icon-show-histogram-inactive.png</file>
+        <file>img/icon-binning-active.png</file>
+        <file>img/icon-binning-inactive.png</file>
+        <file>img/icon-record-alt.png</file>
+        <file>img/icon-take-still.png</file>
+        <file>img/icon-cortex-view.png</file>
+    </qresource>
+</RCC>

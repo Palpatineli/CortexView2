@@ -2,21 +2,32 @@
 #define SESSIONDIALOG_H
 
 #include <QDialog>
+#include "recordparams.h"
+
+class RecordParams;
 
 namespace Ui {
-class sessionDialog;
+class SessionDialog;
 }
 
-class sessionDialog : public QDialog
+class SessionDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit sessionDialog(QWidget *parent = 0);
-    ~sessionDialog();
+    explicit SessionDialog(const RecordParams& params_in, QWidget *parent = 0);
+    ~SessionDialog();
+
+public slots:
+    void verify();
+    void onBrowse();
+
+public:
+    void getRecordingParams();
 
 private:
-    Ui::sessionDialog *ui;
+    Ui::SessionDialog *ui;
+    RecordParams* params_ptr;
 };
 
 #endif // SESSIONDIALOG_H
