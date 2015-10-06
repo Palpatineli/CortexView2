@@ -38,10 +38,12 @@ RESOURCES += \
     icons.qrc
 
 unix: INCLUDEPATH += "/home/palpatine/Documents/specs/PvcamSDK/Inc"
-
+unix: INCLUDEPATH += /usr/include/hdf5/serial
+unix: INCLUDEPATH += "/home/palpatine/Documents/specs/National Instruments/"
 win32:INCLUDEPATH += "C:\Program Files (x86)\National Instruments\Shared\ExternalCompilerSupport\C\include"
-unix:INCLUDEPATH += "/home/palpatine/Documents/specs/National Instruments/"
 
+unix: LIBS += /usr/lib/x86_64-linux-gnu/libhdf5_serial.so
+unix: LIBS += /usr/lib/x86_64-linux-gnu/libhdf5_serial_hl.so
 win32:LIBS += "C:\Program Files (x86)\National Instruments\Shared\ExternalCompilerSupport\C\lib64\msvc\NIDAQmx.lib"
 
 DISTFILES += \

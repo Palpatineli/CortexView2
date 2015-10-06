@@ -158,13 +158,13 @@ void Camera::captureFrame(quint64 timestamp, double phase) {
     uns32 byte_count, buffer_count;
     pl_exp_check_cont_status(hCam, &camera_status, &byte_count, &buffer_count);
     if (camera_status == FRAME_AVAILABLE) {
-        QSharedPointer<QVector<quint16>> image_ptr(new QVector<quint16>(buffer_size));
-        QSharedPointer<QRect> roi_ptr(new QRect);
-        rgn2rect(roi, *roi_ptr);
+        QVector<quint16> image(buffer_size);
+        QRect roi;
+        rgn2rect(roi, roi);
         void* temp_data_ptr;
         pl_exp_get_latest_frame(hCam, &temp_data_ptr);
         quint16* data_ptr = static_cast<quint16*>(temp_data_ptr);
-        std::copy(data_ptr, data_ptr+buffer_size, image_ptr->data());
-        emit(yieldFrame(timestamp, phase, image_ptr, roi_ptr));
+        std::copy(data_ptr, data_ptr+buffer_size, image.data());
+        emit(yieldFrame(timestamp, phase, image, roi));
     }
 }

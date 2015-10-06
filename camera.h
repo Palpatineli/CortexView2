@@ -4,15 +4,13 @@
 #include <QObject>
 #include <QRect>
 #include <QVector>
-#include <QSharedPointer>
 
 #ifndef _MASTER_H
 typedef unsigned short uns16, * uns16_ptr;
 #endif  // _MASTER_H
 #ifndef _PVCAM_H
 /************************* Class 3: Region Definition ************************/
-typedef struct
-{
+typedef struct {
     uns16 s1;                     /* First pixel in the serial register */
     uns16 s2;                     /* Last pixel in the serial register */
     uns16 sbin;                   /* Serial binning for this region */
@@ -21,6 +19,8 @@ typedef struct
     uns16 pbin;                   /* Parallel binning for this region */
 } rgn_type;
 #endif  // _PVCAM_H
+
+typedef QVector<quint16> ImageArray;
 
 class Camera : public QObject {
     Q_OBJECT
@@ -32,14 +32,14 @@ class Camera : public QObject {
     static void rgn2rect(const rgn_type &source, QRect &dest);
 
   signals:
-    void yieldFrame(const quint64 timestamp, const double phase, QSharedPointer<QVector<quint16>> image_ptr, QSharedPointer<QRect> roi_ptr);
+    void yieldFrame(const quint64 timestamp, const double phase, const ImageArray image_ptr, const QRect roi_ptr);
     void raiseError(QString error_message);
     void cameraReady();
     void cameraStarted();
     void cameraStopped();
 
   public slots:
-    void captureFrame(quint64 timestamp, double phase);
+    void captureFrame(const quint64 timestamp, const double phase);
     void setROI(const QRect &roi_in);
     void init();  // returned opend camera name
     void cleanUp(QString function_name);

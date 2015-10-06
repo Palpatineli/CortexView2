@@ -3,6 +3,8 @@
  */
 #include <QRect>
 #include <QDebug>
+#include <QImage>
+#include <QImageWriter>
 
 #include "hdf5.h"
 #include "hdf5_hl.h"
@@ -26,7 +28,7 @@ void SaveWorker::start() {
     H5LTset_attribute_int(hFile, "/", "cycle_no", &cycle_no, 1);
 
     // create custom hdf5 data types
-    hsize_t image_dims[2] = {roi.width(), roi.height()};
+    hsize_t image_dims[2] = {quint64(roi.width()), quint64(roi.height())};
     H5T_IMAGE = H5Tarray_create(H5T_NATIVE_UINT16, 2, image_dims);
 
     hFrames = H5Gcreate(hFile, "frames", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
@@ -51,7 +53,7 @@ void SaveWorker::pushFrame(const quint64 timestamp, const double frame_phase, Im
     if (!(roi_in == roi)) {
         emit(raiseError("roi != roi_in"));
         frame_no++;
-        if (frame_no > 1000) stop();
+        if (frame_no > 100) stop();
         return;
     }
     H5PTappend(hPTable, 1, frame.constData());
@@ -59,7 +61,7 @@ void SaveWorker::pushFrame(const quint64 timestamp, const double frame_phase, Im
     H5PTappend(hFramePhase, 1, &frame_phase);
     H5Fflush(hFile, H5F_SCOPE_GLOBAL);
     frame_no++;
-    if (frame_no > 1000) stop();
+    if (frame_no > 100) stop();
 }
 
 void SaveWorker::cleanUp() {
@@ -80,7 +82,7 @@ void SaveWorker::stop() {
         qDebug() << i;
     }
 
-    hsize_t dims[1] = {diode_signal.length()};
+    hsize_t dims[1] = {quint64(diode_signal.length())};
     hid_t timestamp_space = H5Screate_simple(1, dims, NULL);
     hDiodeSignal = H5LTmake_dataset_double(hDiodes, "diode_signal", 1, dims, diode_signal.constData());
     hDiodeTimestamp = H5Dcreate(hDiodes, "diode_timestamps", H5T_NATIVE_UINT64, timestamp_space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
@@ -88,4 +90,21 @@ void SaveWorker::stop() {
     H5Fflush(hFile, H5F_SCOPE_GLOBAL);
     qDebug() << "before cleanup";
     cleanUp();
+}
+
+bool SaveWorker::savePicture(const QString file_path, const QRect roi_in, const ImageArray image_in) {
+    int width = roi_in.width();
+    QImage image(width, roi_in.height(), QImage::Format_Indexed8);
+    QVector<QRgb> colors;
+    for (int i=0; i<256; i++) colors << qRgb(i, i, i);
+    image.setColorTable(colors);
+    for (int i=0;i<roi_in.height();i++) {
+        uchar* line = image.scanLine(i);
+        for (int j=0;j<width;j++) line[j] = image_in[i*width+j] >> 8;
+    }
+    QImageWriter file(file_path, "png");
+    file.setQuality(1);
+    file.write(image);
+    qDebug() << "written to " << file_path;
+    return true;
 }
