@@ -6,8 +6,8 @@
 #include <QImage>
 #include <QImageWriter>
 
-#include "hdf5.h"
-#include "hdf5_hl.h"
+#include <hdf5.h>
+#include <hdf5_hl.h>
 #include "recordparams.h"
 #include "saveworker.h"
 
@@ -17,6 +17,7 @@ SaveWorker::SaveWorker(QRect roi_in, QObject *parent) : QObject(parent),
 }
 
 void SaveWorker::start() {
+    params->lock();
     QByteArray file_name = params->getFile_path().toLocal8Bit();
     hFile = H5Fcreate(file_name.constData(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
     needs_cleanUp = true;
@@ -39,11 +40,11 @@ void SaveWorker::start() {
     hFrameTimestamp = H5PTcreate_fl(hFrames, "frame_timestamps", H5T_NATIVE_UINT64, 128, 5);
     hFramePhase = H5PTcreate_fl(hFrames, "frame_phases", H5T_NATIVE_DOUBLE, 128, 5);
     is_initialized = true;
+    emit(started());
 }
 
 void SaveWorker::pushDiodeSignal(quint64 timestamp, double signal_size) {
     if (!is_initialized) return;
-    return;
     diode_signal<<signal_size;
     diode_timestamp<<timestamp;
 }
@@ -72,15 +73,13 @@ void SaveWorker::cleanUp() {
     H5PTclose(hPTable);
     H5Fclose(hFile);
     qDebug() << "after cleanup";
+    params->unlock();
     emit(finished());
 }
 
 void SaveWorker::stop() {
     is_initialized = false;
     hDiodes = H5Gcreate(hFile, "diodes", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    foreach(double i, diode_signal) {
-        qDebug() << i;
-    }
 
     hsize_t dims[1] = {quint64(diode_signal.length())};
     hid_t timestamp_space = H5Screate_simple(1, dims, NULL);
@@ -90,21 +89,4 @@ void SaveWorker::stop() {
     H5Fflush(hFile, H5F_SCOPE_GLOBAL);
     qDebug() << "before cleanup";
     cleanUp();
-}
-
-bool SaveWorker::savePicture(const QString file_path, const QRect roi_in, const ImageArray image_in) {
-    int width = roi_in.width();
-    QImage image(width, roi_in.height(), QImage::Format_Indexed8);
-    QVector<QRgb> colors;
-    for (int i=0; i<256; i++) colors << qRgb(i, i, i);
-    image.setColorTable(colors);
-    for (int i=0;i<roi_in.height();i++) {
-        uchar* line = image.scanLine(i);
-        for (int j=0;j<width;j++) line[j] = image_in[i*width+j] >> 8;
-    }
-    QImageWriter file(file_path, "png");
-    file.setQuality(1);
-    file.write(image);
-    qDebug() << "written to " << file_path;
-    return true;
 }

@@ -14,7 +14,6 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    sessiondialog.cpp \
     camera.cpp \
     saveworker.cpp \
     recordparams.cpp \
@@ -23,7 +22,6 @@ SOURCES += main.cpp\
     nidaqbox.cpp
 
 HEADERS  += mainwindow.h \
-    sessiondialog.h \
     camera.h \
     saveworker.h \
     recordparams.h \
@@ -31,20 +29,24 @@ HEADERS  += mainwindow.h \
     onlineprocessor.h \
     nidaqbox.h
 
-FORMS    += mainwindow.ui \
-    sessiondialog.ui
+FORMS    += mainwindow.ui
 
 RESOURCES += \
     icons.qrc
 
-unix: INCLUDEPATH += "/home/palpatine/Documents/specs/PvcamSDK/Inc"
-unix: INCLUDEPATH += /usr/include/hdf5/serial
 unix: INCLUDEPATH += "/home/palpatine/Documents/specs/National Instruments/"
+unix: INCLUDEPATH += "/home/palpatine/Documents/specs/PvcamSDK/Inc"
+unix: INCLUDEPATH += "/usr/include/hdf5/serial"
 win32:INCLUDEPATH += "C:\Program Files (x86)\National Instruments\Shared\ExternalCompilerSupport\C\include"
+win32:INCLUDEPATH += "C:\Program Files\Photometrics\PvcamSDK\Inc"
+win32:INCLUDEPATH += "C:\Program Files\HDF_Group\HDF5\1.8.15\include"
 
-unix: LIBS += /usr/lib/x86_64-linux-gnu/libhdf5_serial.so
-unix: LIBS += /usr/lib/x86_64-linux-gnu/libhdf5_serial_hl.so
+unix: LIBS += "/usr/lib/x86_64-linux-gnu/libhdf5_serial.so"
+unix: LIBS += "/usr/lib/x86_64-linux-gnu/libhdf5_serial_hl.so"
 win32:LIBS += "C:\Program Files (x86)\National Instruments\Shared\ExternalCompilerSupport\C\lib64\msvc\NIDAQmx.lib"
+win32:LIBS += "C:\Program Files\Photometrics\PvcamSDK\Lib\AMD64\pvcam64.lib"
+win32:LIBS += "C:\Program Files\HDF_Group\HDF5\1.8.15\lib\hdf5.lib"
+win32:LIBS += "C:\Program Files\HDF_Group\HDF5\1.8.15\lib\hdf5_hl.lib"
 
 DISTFILES += \
     README.txt

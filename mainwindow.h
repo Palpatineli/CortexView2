@@ -5,6 +5,7 @@
 #include <QErrorMessage>
 #include <QThread>
 #include <QReadWriteLock>
+#include <QTimer>
 #include "saveworker.h"
 #include "nidaqbox.h"
 #include "nidaqbox.h"
@@ -26,38 +27,37 @@ public:
     ~MainWindow();
 
 signals:
-    void initSaving(QString file_path, int frame_no);
-    void savePicture(QString file_path);
+    void takePicture(QString file_path);
+    void closeSignal();
 
 private slots:
-    void resetROI();
-    void openRecordDialog();
-    void openTakePictureDialog();
-
+    void onBrowse();
+    void onRecord();
+    void onTakePicture();
     void recordingFinished();
+    void closeEvent(QCloseEvent *event) Q_DECL_OVERRIDE;
 
 private:
     Ui::MainWindow *ui;
 
-    void startRecord();
-    void takePicture();
-    void init();
-    QErrorMessage errorDialog;
-    QSharedPointer<RecordParams> params;
+    void startRecording();
+    QErrorMessage error_dialog;
+    RecordParams* params;
 
-    QSharedPointer<QThread> saveThread;
-    QSharedPointer<SaveWorker> saveWorker;
+    QThread* save_thread;
+    SaveWorker* save_worker;
 
-    QThread niDaqThread;
-    NIDaqBox niDaqBox;
-    NIDaqBox niDaqBox;
+    QThread niDaq_thread;
+    NIDaqBox niDaq_box;
 
-    bool is_recording;
-    QThread cameraThread;
+    QThread camera_thread;
     Camera camera;
+    QTimer temp_check_timer, debug_timer;
 
-    QThread processingThread;
+    QThread processing_thread;
     OnlineProcessor processor;
+
+    bool verify_input();
 };
 
 #endif // MAINWINDOW_H

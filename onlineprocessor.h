@@ -3,6 +3,11 @@
 
 #include <QObject>
 #include <QRect>
+#include <QVector>
+#include <QImage>
+
+typedef QVector<quint16> ImageArray;
+typedef QVector<qreal> DFTArray;
 
 class OnlineProcessor : public QObject
 {
@@ -11,28 +16,26 @@ public:
     explicit OnlineProcessor(QObject *parent = 0);
 
 signals:
-    void yieldImage(const uchar* image[512][2048], const QRect& roi);
-    void yieldDFT(const qreal* result_real[512][512], const qreal* result_imag[512][512]);
+    void yieldImage(const QImage image, const QRect roi);
+    void raiseError(QString error_message);
 
 public slots:
-    void updateImage(quint64 timestamp, double phase, const QSharedPointer<QVector<quint16>> image_ptr, QSharedPointer<QRect> roi_ptr);
-    void startRecording(const QRect& roi);
+    void updateImage(const quint64 timestamp, const double phase, const ImageArray image, const QRect roi);
+    void startRecording();
     void stopRecording();
-    void takePicture();
+    void takePicture(QString file_path);
 
 private:
-    quint16* buffer[512][512];
-    uchar draw_buffer[512][2048];
     QRect roi;
-    qreal onlineAddition_real[512][512];
-    qreal onlineAddition_imag[512][512];
-    bool is_recording;
+    DFTArray real;
+    DFTArray imag;
+    QString file_path;
+    bool is_recording, take_next_picture;
     quint64 frame_no;
-    qreal phase;
 
-    void drawBufferFromRaw();
-    void drawBufferFromRawHighlight();
-    void processFrame();
+    QImage drawBufferFromRaw(const ImageArray image);
+    void processFrame(const ImageArray image, qreal phase);
+    QImage drawBufferFromDFT();
 };
 
 #endif // ONLINEPROCESSOR_H

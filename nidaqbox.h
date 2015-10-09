@@ -13,6 +13,8 @@
 #endif  // CVICALLBACK
 
 typedef void* TaskHandle;
+typedef signed long int32;
+class RecordParams;
 
 class NIDaqBox : public QObject
 {
@@ -21,6 +23,8 @@ public:
     explicit NIDaqBox(QObject *parent = 0);
     ~NIDaqBox();
 
+    bool isReady();
+
 signals:
     void raiseError(QString errorMsg);
     void cameraFrameReady(quint64 timestamp, double phase);
@@ -28,18 +32,22 @@ signals:
 
 public slots:
     void init();
-    void setPhaseParams(quint32 frame_no, double cycle_time);
+    void reset();
 
 private:
     const quint32 NI_FREQ = 1000;
+    const quint32 frames_per_pulse = 6;
+
     // running status
     bool is_initialized;
+    RecordParams* params;
 
     // to read and record analog input
-    QVector<double> diode_levels;  // signal levels to digitize diode signals
-    qint32 error_id, read_no;
-    double previous_diode, previous_cam, previous_diode_diff, previous_cam_diff, diode_diff, cam_diff;
+    bool cam_is_low;
+    int32 read_no;
     double tempBuffer[2];
+    QVector<double> diode_levels;  // signal levels to digitize diode signals
+    double previous_diode, previous_diode_diff, diode_diff;
     bool diode_rising;
     quint64 current_time, current_diode_signal_time, last_diode_signal_time;
     double current_phase, last_diode_signal_phase, diode_onset_level;
@@ -51,9 +59,13 @@ private:
     TaskHandle hTask;
     void readSample(TaskHandle hTask);
 
-    friend qint32 CVICALLBACK signalEventCallback(TaskHandle, qint32, /*uInt32, */void*);
+    void onError();
+    void lookupError();
+    void cleanup();
+
+    friend int32 CVICALLBACK signalEventCallback(TaskHandle, int32, /*uInt32, */void*);
 };
 
-qint32 CVICALLBACK signalEventCallback(TaskHandle hTask, qint32 eventType, /*uInt32 nSamples, */void *callbackData);
+int32 CVICALLBACK signalEventCallback(TaskHandle hTask, int32 eventType, /*uInt32 nSamples, */void *callbackData);
 
 #endif // NIDAQSIGNALSTREAM_H

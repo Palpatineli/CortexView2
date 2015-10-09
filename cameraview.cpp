@@ -1,34 +1,33 @@
 #include <QPainter>
 #include <QMouseEvent>
+#include <QDebug>
 #include "cameraview.h"
 
-CameraView::CameraView(QWidget *parent) :
-    QWidget(parent),
-    status("Loading"), status_color(Qt::yellow), roi(0, 0, 512, 512),
-    is_drawing_roi(false), is_needing_redraw(false),
-    is_waiting_incoming(false),
-    image(512, 512, QImage::Format_ARGB32){
-    timer.start(13, this);
-    roi_inverse<<QRect(0, 0, 512, 0)<<QRect(512, 0, 0, 512)<<QRect(0, 512, 512, 0)<<QRect(0, 0, 0, 512);
+CameraView::CameraView(QWidget *parent) : QWidget(parent),
+    draw_roi(0, 0, 512, 512),
+    is_drawing_roi(false), is_needing_redraw(false), is_waiting_incoming(false),
+    status("Standby"), status_color(Qt::green) {
+    roi_inverse << QRect(0, 0, 512, 0) << QRect(512, 0, 0, 512) << QRect(0, 512, 512, 0) << QRect(0, 0, 0, 512);
+    timer.start(13, Qt::CoarseTimer, this);
 }
 
 CameraView::~CameraView() {
 }
 
-void CameraView::paintEvent(QPaintEvent */*event*/) {
+void CameraView::paintEvent(QPaintEvent * /*event*/) {
     QPainter painter(this);
     if (image.isNull()) {
         painter.fillRect(rect(), Qt::gray);
-    } else if (is_needing_redraw){
-        painter.drawImage(rect(), image, rect());
+    } else if (is_needing_redraw) {
+        painter.drawImage(roi, image);
         painter.setPen(Qt::NoPen);
         painter.setBrush(TRANSPARENT_BLACK);
         painter.drawRects(roi_inverse);
         paintStatus();
         is_needing_redraw = false;
     } else {
-        painter.setClipRect(roi);
-        painter.drawImage(roi, image, roi);
+        painter.setClipRect(draw_roi);
+        painter.drawImage(roi, image);
     }
 }
 
@@ -44,11 +43,7 @@ void CameraView::paintStatus() {
     painter.drawText(10, metrics.leading() + metrics.ascent() + 5, status);
 }
 
-void CameraView::histogram() {
-    QVector<quint32> hist(100);
-}
-
-void CameraView::timerEvent(QTimerEvent */*event*/) {
+void CameraView::timerEvent(QTimerEvent * /*event*/) {
     update();
 }
 
@@ -67,39 +62,31 @@ void CameraView::mousePressEvent(QMouseEvent *event) {
 
 void CameraView::mouseMoveEvent(QMouseEvent *event) {
     if (is_drawing_roi) {
-        updateRoi(QRect(dragStart, event->pos()).normalized());
+        setROI(QRect(dragStart, event->pos()).normalized());
     }
 }
 
 void CameraView::mouseReleaseEvent(QMouseEvent *event) {
     if (is_drawing_roi) {
-        emit(roiChangeEvent(roi));
         is_drawing_roi = false;
-        updateRoi(QRect(dragStart, event->pos()).normalized());
+        setROI(QRect(dragStart, event->pos()).normalized());
+        emit(roiChangeEvent(draw_roi));
     }
 }
 
-void CameraView::updateRoi(QRect new_roi) {
-    roi = new_roi;
-    roi_inverse[0].moveBottom(roi.top());
-    roi_inverse[1].moveLeft(roi.right());
-    roi_inverse[2].moveTop(roi.bottom());
-    roi_inverse[3].moveRight(roi.left());
+void CameraView::setROI(QRect new_roi) {
+    draw_roi = new_roi;
+    roi_inverse[0].moveBottom(draw_roi.top());
+    roi_inverse[1].moveLeft(draw_roi.right());
+    roi_inverse[2].moveTop(draw_roi.bottom());
+    roi_inverse[3].moveRight(draw_roi.left());
     is_needing_redraw = true;
     is_waiting_incoming = true;
 }
 
-void CameraView::updateImage(const uchar * const image_in, const QRect &update_rect) {
-    int bottom = update_rect.bottom();
-    int right = update_rect.right() * 4;
-    int left = update_rect.left() * 4;
-    for (int i = update_rect.top(); i < bottom; i++) {
-        uchar *image_line = image.scanLine(i);
-        int offset = i * update_rect.width() * 4;
-        for (int j = left; j < right; j++) {
-            image_line[j] = image_in[offset + j];
-        }
-    }
+void CameraView::updateImage(const QImage image_in, const QRect update_rect) {
+    image = image_in;
+    roi = update_rect;
     if (is_waiting_incoming) {
         is_needing_redraw = true;
         is_waiting_incoming = false;

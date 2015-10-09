@@ -15,13 +15,14 @@ public:
     explicit CameraView(QWidget *parent = 0);
     ~CameraView();
 
+    void updateStatus(const QString status, const Qt::GlobalColor status_color);
+
 signals:
-    void roiChangeEvent(QRect new_roi);
+    void roiChangeEvent(const QRect new_roi);
 
 public slots:
-    void updateImage(const uchar* const image_in, const QRect& update_rect);
-    void updateStatus(QString status, Qt::GlobalColor status_color);
-    void updateRoi(QRect new_roi);
+    void updateImage(const QImage image_in, const QRect draw_roi);
+    void setROI(const QRect new_roi = QRect(0, 0, 512, 512));
 
 protected:
     void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE;
@@ -34,20 +35,18 @@ private:
     const QColor TRANSPARENT_BLACK = QColor(0, 0, 0, 127);
 
     QBasicTimer timer;
-    QImage image;
     QReadWriteLock* lock;
+    QImage image;
 
     QPoint dragStart;
+    QRect draw_roi, roi;
     bool is_drawing_roi, is_needing_redraw, is_waiting_incoming;
-    QRect roi;
     QVector<QRect> roi_inverse;
 
     QString status;
     Qt::GlobalColor status_color;
 
     void paintStatus();
-    void paintRoi();
-    void histogram();
 };
 
 #endif // CAMERAVIEW_H

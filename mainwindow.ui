@@ -3,7 +3,7 @@
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
   <property name="enabled">
-   <bool>false</bool>
+   <bool>true</bool>
   </property>
   <property name="geometry">
    <rect>
@@ -44,7 +44,7 @@
     </property>
     <widget class="QPushButton" name="recordButton">
      <property name="enabled">
-      <bool>false</bool>
+      <bool>true</bool>
      </property>
      <property name="geometry">
       <rect>
@@ -72,6 +72,9 @@
        <width>32</width>
        <height>32</height>
       </size>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
      </property>
     </widget>
     <widget class="QPushButton" name="resetROIButton">
@@ -104,9 +107,9 @@
     <widget class="QProgressBar" name="progressBar">
      <property name="geometry">
       <rect>
-       <x>210</x>
+       <x>160</x>
        <y>14</y>
-       <width>292</width>
+       <width>82</width>
        <height>12</height>
       </rect>
      </property>
@@ -121,50 +124,34 @@
      </property>
     </widget>
     <widget class="QProgressBar" name="temperatureBar">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
      <property name="geometry">
       <rect>
-       <x>210</x>
+       <x>160</x>
        <y>34</y>
-       <width>292</width>
+       <width>82</width>
        <height>12</height>
       </rect>
      </property>
      <property name="toolTip">
       <string>Camera Temperature</string>
      </property>
+     <property name="minimum">
+      <number>-100</number>
+     </property>
+     <property name="maximum">
+      <number>50</number>
+     </property>
      <property name="value">
-      <number>24</number>
+      <number>-20</number>
+     </property>
+     <property name="invertedAppearance">
+      <bool>false</bool>
      </property>
      <property name="format">
-      <string>%p °C</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="histogramToggle">
-     <property name="geometry">
-      <rect>
-       <x>160</x>
-       <y>10</y>
-       <width>40</width>
-       <height>40</height>
-      </rect>
-     </property>
-     <property name="toolTip">
-      <string>Show/Hide histogram</string>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-     <property name="icon">
-      <iconset>
-       <normalon>:/new/icon/img/icon-show-histogram-inactive.png</normalon>
-       <activeon>:/new/icon/img/icon-show-histogram.png</activeon>
-      </iconset>
-     </property>
-     <property name="iconSize">
-      <size>
-       <width>32</width>
-       <height>32</height>
-      </size>
+      <string>%vC</string>
      </property>
     </widget>
     <widget class="QPushButton" name="cameraButton">
@@ -193,8 +180,194 @@
       </size>
      </property>
     </widget>
+    <widget class="QSpinBox" name="cycleNoSpin">
+     <property name="geometry">
+      <rect>
+       <x>419</x>
+       <y>34</y>
+       <width>45</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+     <property name="buttonSymbols">
+      <enum>QAbstractSpinBox::PlusMinus</enum>
+     </property>
+     <property name="accelerated">
+      <bool>true</bool>
+     </property>
+     <property name="minimum">
+      <number>1</number>
+     </property>
+     <property name="maximum">
+      <number>80</number>
+     </property>
+     <property name="singleStep">
+      <number>5</number>
+     </property>
+     <property name="value">
+      <number>20</number>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="filePathEdit">
+     <property name="geometry">
+      <rect>
+       <x>252</x>
+       <y>8</y>
+       <width>177</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QSpinBox" name="periodSpinInF">
+     <property name="geometry">
+      <rect>
+       <x>252</x>
+       <y>34</y>
+       <width>50</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+     <property name="buttonSymbols">
+      <enum>QAbstractSpinBox::PlusMinus</enum>
+     </property>
+     <property name="accelerated">
+      <bool>true</bool>
+     </property>
+     <property name="minimum">
+      <number>6</number>
+     </property>
+     <property name="maximum">
+      <number>2000</number>
+     </property>
+     <property name="singleStep">
+      <number>6</number>
+     </property>
+     <property name="value">
+      <number>900</number>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="browseFileButton">
+     <property name="geometry">
+      <rect>
+       <x>427</x>
+       <y>8</y>
+       <width>75</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>browse...</string>
+     </property>
+    </widget>
+    <widget class="QDoubleSpinBox" name="periodSpinInS">
+     <property name="geometry">
+      <rect>
+       <x>348</x>
+       <y>34</y>
+       <width>55</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+     <property name="buttonSymbols">
+      <enum>QAbstractSpinBox::PlusMinus</enum>
+     </property>
+     <property name="accelerated">
+      <bool>true</bool>
+     </property>
+     <property name="value">
+      <double>12.000000000000000</double>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label">
+     <property name="geometry">
+      <rect>
+       <x>304</x>
+       <y>34</y>
+       <width>40</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>frames</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_2">
+     <property name="geometry">
+      <rect>
+       <x>405</x>
+       <y>34</y>
+       <width>10</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>s</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_3">
+     <property name="geometry">
+      <rect>
+       <x>466</x>
+       <y>34</y>
+       <width>36</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>cycles</string>
+     </property>
+    </widget>
    </widget>
    <widget class="CameraView" name="cameraView" native="true">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>0</x>
@@ -208,6 +381,9 @@
       <horstretch>0</horstretch>
       <verstretch>0</verstretch>
      </sizepolicy>
+    </property>
+    <property name="mouseTracking">
+     <bool>true</bool>
     </property>
    </widget>
   </widget>

@@ -16,9 +16,8 @@ class SaveWorker : public QObject
 public:
     explicit SaveWorker(QRect roi, QObject *parent = 0);
 
-    static bool savePicture(const QString file_path, const QRect roi_in, const ImageArray image);
-
 signals:
+    void started();
     void finished();
     void raiseError(QString error_message);
 

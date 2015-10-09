@@ -4,9 +4,10 @@
 #include <QObject>
 #include <QRect>
 #include <QVector>
+#include <QPair>
 
 #ifndef _MASTER_H
-typedef unsigned short uns16, * uns16_ptr;
+typedef unsigned short uns16;
 #endif  // _MASTER_H
 #ifndef _PVCAM_H
 /************************* Class 3: Region Definition ************************/
@@ -21,6 +22,7 @@ typedef struct {
 #endif  // _PVCAM_H
 
 typedef QVector<quint16> ImageArray;
+class RecordParams;
 
 class Camera : public QObject {
     Q_OBJECT
@@ -31,40 +33,47 @@ class Camera : public QObject {
     static void rect2rgn(const QRect &source, rgn_type &dest);
     static void rgn2rect(const rgn_type &source, QRect &dest);
 
+    QRect getROI() const;
+    bool isReady() const;
+
   signals:
     void yieldFrame(const quint64 timestamp, const double phase, const ImageArray image_ptr, const QRect roi_ptr);
     void raiseError(QString error_message);
-    void cameraReady();
-    void cameraStarted();
-    void cameraStopped();
+    void yieldTemperature(int temperature);
 
   public slots:
-    void captureFrame(const quint64 timestamp, const double phase);
-    void setROI(const QRect &roi_in);
-    void init();  // returned opend camera name
-    void cleanUp(QString function_name);
-    void setRecording(bool is_recording);
+    void captureFrame(const quint64 timestamp = 0, const double phase = 0);
+    void setROI(const QRect& roi_in = QRect(0, 0, 512, 512));
+    void init();
+    void checkTemp();
 
   private:
-    const quint32 CIRCULAR_BUFFER_FRAME_NO = 20;
+    const quint32 CIRCULAR_BUFFER_FRAME_NO = 100;
+    int timer_id;
+    quint64 debug_counter;
 
     // running parameters
-    bool needs_clean_up, is_recording, is_running, is_initialized;
+    RecordParams* params;
+    bool needs_clean_up, is_running, is_initialized;
     //
     QByteArray camera_name;
     qint16 hCam;
-    QRect ccd_size;
-    rgn_type roi;
-    quint64 buffer_size;
-    uns32 stream_size;
-    QVector<quint16> circ_buffer;
+    QRect ccd_size, roi;
+    quint64 frame_size;
+    quint16* circ_buffer;
+
+    void onError(QString function_name);
+    void lookUpError(QString function_name);
+    void cleanup();
 
     void startAcquisition();
     void stopAcquisition();
-    void lookUpError(QString function_name);
-    bool assertParamAvailability(quint32 param_id);
+
+    bool assertParamAvailability(quint32 param_id, QString param_name);
+    bool setParam(quint32 param_id, QString param_name, void* param_value);
     bool initCCDSize();
     bool initSpeedTable(QVector<QPoint> &indices, QVector<float> &readout_freq, QVector<quint16> &bit_depth);
+    QVector<QPair<qint32, QByteArray>> enumerateParameter(quint32 param_id, QString param_name);
 
 };
 
