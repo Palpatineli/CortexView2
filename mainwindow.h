@@ -52,7 +52,7 @@ private:
 
     QThread camera_thread;
     Camera camera;
-    QTimer temp_check_timer, debug_timer;
+    QTimer temp_check_timer;
 
     QThread processing_thread;
     OnlineProcessor processor;

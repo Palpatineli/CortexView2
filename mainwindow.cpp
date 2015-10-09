@@ -35,10 +35,7 @@ MainWindow::MainWindow(QWidget *parent) :
     camera.moveToThread(&camera_thread);
     connect(&camera, SIGNAL(raiseError(QString)), &error_dialog, SLOT(showMessage(QString)));
     connect(&camera_thread, SIGNAL(started()), &camera, SLOT(init()));
-    connect(&niDaq_box, SIGNAL(cameraFrameReady(quint64, double)), &camera, SLOT(captureFrame(quint64, double)));
-
-    // debug
-    connect(&debug_timer, SIGNAL(timeout()), &camera, SLOT(captureFrame()));
+//    connect(&niDaq_box, SIGNAL(cameraFrameReady(quint64, double)), &camera, SLOT(captureFrame(quint64, double)));
 
     processor.moveToThread(&processing_thread);
     connect(&processor, SIGNAL(raiseError(QString)), &error_dialog, SLOT(showMessage(QString)));
@@ -70,7 +67,6 @@ MainWindow::MainWindow(QWidget *parent) :
     camera_thread.start();
     processing_thread.start();
     temp_check_timer.start(2000);
-    debug_timer.start(500);
 }
 
 MainWindow::~MainWindow() {

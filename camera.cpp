@@ -7,7 +7,7 @@
 #include "camera.h"
 
 Camera::Camera(QObject *parent) : QObject(parent),
-    is_initialized(false), needs_clean_up(false), ccd_size(0, 0, 512, 512), roi(0, 0, 512, 512), is_running(false), debug_counter(0) {
+    callback_registered(false), is_initialized(false), needs_clean_up(false), ccd_size(0, 0, 512, 512), roi(0, 0, 512, 512), is_running(false), debug_counter(0) {
     params = RecordParams::getParams();
 }
 
@@ -39,13 +39,13 @@ void Camera::init() {
 // enable on chip multiplier gain because it is claimed to reduce read noise (if it is possible)
     int shutter_mode = OPEN_PRE_EXPOSURE;
     setParam(PARAM_SHTR_OPEN_MODE, "PARAM_SHTR_OPEN_MODE", &shutter_mode);
-//    rs_bool is_frame_transfer;
-//    if (!assertParamAvailability(PARAM_FRAME_CAPABLE, "PARAM_FRAME_CAPABLE")) return;
-//    pl_get_param(hCam, PARAM_FRAME_CAPABLE, ATTR_CURRENT, &is_frame_transfer);
-//    if (is_frame_transfer) {
-//        int p_mode = PMODE_FT;
-//        setParam(PARAM_PMODE, "PARAM_PMODE", &p_mode);
-//    }
+    rs_bool is_frame_transfer;
+    if (!assertParamAvailability(PARAM_FRAME_CAPABLE, "PARAM_FRAME_CAPABLE")) return;
+    pl_get_param(hCam, PARAM_FRAME_CAPABLE, ATTR_CURRENT, &is_frame_transfer);
+    if (is_frame_transfer) {
+        int p_mode = PMODE_FT;
+        setParam(PARAM_PMODE, "PARAM_PMODE", &p_mode);
+    }
     rs_bool can_circ_buffer;
     pl_get_param(hCam, PARAM_CIRC_BUFFER, ATTR_AVAIL, &can_circ_buffer);
     qDebug() << "can use circular buffer" << can_circ_buffer;
@@ -58,6 +58,8 @@ void Camera::init() {
     uns32 readout_time;
     if (PV_FAIL == pl_get_param(hCam, PARAM_READOUT_TIME, ATTR_CURRENT, &readout_time)) {onError("pl_get_param(PARAM_PAR_SIZE)"); return;}
     qDebug() << "readout time (ns): " << readout_time;
+    if (PV_FAIL == pl_cam_register_callback_ex(hCam, PL_CALLBACK_EOF, camCallback, this)) {onError("pl_cam_register_callback_ex"); return;}
+    callback_registered = true;
     is_initialized = true;
     qDebug() << "camera initialized";
     startAcquisition();
@@ -195,6 +197,7 @@ void Camera::cleanup() {
     qDebug() << "cleanup";
     if (!needs_clean_up) return;
     if (is_running) stopAcquisition();
+    if (callback_registered) {pl_cam_deregister_callback(hCam, PL_CALLBACK_EOF); callback_registered = false;}
     if (PV_FAIL == pl_exp_uninit_seq()) lookUpError("pl_exp_uninit_seq()");
     is_initialized = false;
 // pl_pvcam_uninit() automatically calls pl_cam_close()
@@ -215,23 +218,17 @@ void Camera::setROI(const QRect &roi_in) {
     }
 }
 
-void Camera::captureFrame(quint64 timestamp, double phase) {
+void Camera::captureFrame() {
     if (!is_running || !is_initialized) return;
-    qint16 camera_status;
-    uns32 byte_count, buffer_count;
-    pl_exp_check_cont_status(hCam, &camera_status, &byte_count, &buffer_count);
-    qDebug() << "circ_buffer_status" << byte_count << buffer_count << camera_status;
-    if (camera_status == FRAME_AVAILABLE) {
-        QVector<quint16> image(frame_size);
-        void *temp_data_ptr;
-        if (PV_FAIL == pl_exp_get_oldest_frame(hCam, &temp_data_ptr)) {onError("pl_exp_get_oldest_frame"); return;}
-        quint16 *data_ptr = static_cast<quint16 *>(temp_data_ptr);
-        std::copy(data_ptr, data_ptr + frame_size - 1, image.data());
-        if (PV_FAIL == pl_exp_unlock_oldest_frame(hCam)) {onError("pl_exp_unlock_oldest_frame"); return;}
-        debug_counter++;
-        qDebug() << "emitted " << debug_counter << " frame at " << timestamp << QTime::currentTime().msec();
-        emit(yieldFrame(timestamp, phase, image, roi));
-    }
+    QVector<quint16> image(frame_size);
+    void *temp_data_ptr;
+    if (PV_FAIL == pl_exp_get_oldest_frame(hCam, &temp_data_ptr)) {onError("pl_exp_get_oldest_frame"); return;}
+    quint16 *data_ptr = static_cast<quint16 *>(temp_data_ptr);
+    std::copy(data_ptr, data_ptr + frame_size - 1, image.data());
+    if (PV_FAIL == pl_exp_unlock_oldest_frame(hCam)) {onError("pl_exp_unlock_oldest_frame"); return;}
+    debug_counter++;
+    qDebug() << "emitted " << debug_counter << " frame at " << QTime::currentTime().msec();
+    emit(yieldFrame(0, 0, image, roi));
 }
 
 void Camera::checkTemp() {
@@ -249,4 +246,8 @@ QRect Camera::getROI() const {
 
 bool Camera::isReady() const {
     return is_running;
+}
+
+void camCallback(void* content) {
+    static_cast<Camera*>(content)->captureFrame();
 }

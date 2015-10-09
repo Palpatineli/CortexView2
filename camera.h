@@ -42,19 +42,18 @@ class Camera : public QObject {
     void yieldTemperature(int temperature);
 
   public slots:
-    void captureFrame(const quint64 timestamp = 0, const double phase = 0);
     void setROI(const QRect& roi_in = QRect(0, 0, 512, 512));
     void init();
     void checkTemp();
 
   private:
-    const quint32 CIRCULAR_BUFFER_FRAME_NO = 100;
+    const quint32 CIRCULAR_BUFFER_FRAME_NO = 20;
     int timer_id;
     quint64 debug_counter;
 
     // running parameters
     RecordParams* params;
-    bool needs_clean_up, is_running, is_initialized;
+    bool needs_clean_up, is_running, is_initialized, callback_registered;
     //
     QByteArray camera_name;
     qint16 hCam;
@@ -69,12 +68,16 @@ class Camera : public QObject {
     void startAcquisition();
     void stopAcquisition();
 
+    void captureFrame();
     bool assertParamAvailability(quint32 param_id, QString param_name);
     bool setParam(quint32 param_id, QString param_name, void* param_value);
     bool initCCDSize();
     bool initSpeedTable(QVector<QPoint> &indices, QVector<float> &readout_freq, QVector<quint16> &bit_depth);
     QVector<QPair<qint32, QByteArray>> enumerateParameter(quint32 param_id, QString param_name);
 
+    friend void camCallback(void* contetn);
 };
+
+void camCallback(void* contetn);
 
 #endif // CAMERA_H
