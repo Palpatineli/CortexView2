@@ -19,7 +19,8 @@ SOURCES += main.cpp\
     recordparams.cpp \
     cameraview.cpp \
     onlineprocessor.cpp \
-    nidaqbox.cpp
+    nidaqbox.cpp \
+    regionofinterest.cpp
 
 HEADERS  += mainwindow.h \
     camera.h \
@@ -27,7 +28,8 @@ HEADERS  += mainwindow.h \
     recordparams.h \
     cameraview.h \
     onlineprocessor.h \
-    nidaqbox.h
+    nidaqbox.h \
+    regionofinterest.h
 
 FORMS    += mainwindow.ui
 

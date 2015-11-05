@@ -1,14 +1,15 @@
-#include <qmath.h>
-#include <QSettings>
-#include <QVariant>
 #include <QDebug>
+#include <QSettings>
+#include <QTime>
+#include <QVariant>
 
 #include "NIDAQmx.h"
 #include "nidaqbox.h"
 #include "recordparams.h"
 
 NIDaqBox::NIDaqBox(QObject *parent) : QObject(parent),
-    is_initialized(false), cam_is_low(true) {
+    is_initialized(false), cam_is_high(false), diode_is_rising(false),
+    previous_diode(10), current_time(0) {
     params = RecordParams::getParams();
 }
 
@@ -19,22 +20,10 @@ NIDaqBox::~NIDaqBox() {
 void NIDaqBox::init() {
     QString device_string;
 
-    // load or initalize diode steps
     QSettings settings;
-    if (settings.contains("diode_levels")) {
-        QList<QVariant> tempList = settings.value("diode_levels").toList();
-        QVariant item;
-        foreach (item, tempList) diode_levels << item.toDouble();
-    } else {  // default values
-        diode_levels << 0.05 << 0.30074 << 0.51133 << 0.72274 << 0.93121 << 1.134 << 1.35;
-        QVariantList tempList;
-        foreach (const double item, diode_levels) tempList << QVariant(item);
-        settings.setValue("diode_levels", tempList);
-    }
-
     // load or initialize device name
     if (settings.contains("NIDAQ_device_name")) {
-        device_string = settings.value("NIDAQ_device_name").toString();\
+        device_string = settings.value("NIDAQ_device_name").toString(); \
     } else {
         device_string = "cDAQ1Mod1/ai0:1";  // first one is diode input, second one is camera exposure out input
         settings.setValue("NIDAQ_device_name", device_string);
@@ -45,7 +34,6 @@ void NIDaqBox::init() {
     if (0 > DAQmxCfgSampClkTiming(hTask, "", 1000.0, DAQmx_Val_Rising, DAQmx_Val_ContSamps, 0)) {onError(); return;}
     if (0 > DAQmxRegisterSignalEvent(hTask, DAQmx_Val_SampleCompleteEvent, 0, signalEventCallback, this)) {onError(); return;}
     if (0 > DAQmxStartTask(hTask)) {onError(); return;}
-    reset();
     is_initialized = true;
     qDebug() << "NIDaq box initialized";
 }
@@ -73,60 +61,37 @@ void NIDaqBox::cleanup() {
     hTask = 0;
 }
 
-void NIDaqBox::reset() {
-    phase_per_tick = (2 * M_PI) / (params->getPeriod_in_seconds() * NI_FREQ);
-    // due to diode accumulation the monitor can only send one signal every six to nine frames ~75Hz.
-    phase_per_pulse = (2 * frames_per_pulse * M_PI) / (params->getPeriod_in_frames());
-    current_phase = -1;
-    previous_diode = 0;
-    previous_diode_diff = 0;
-    last_diode_signal_time = 0;
-    last_diode_signal_phase = 0;
-    diode_rising = false;
-    current_time = 0;
-}
-
 void NIDaqBox::readSample(TaskHandle hTask) {
-/* Read every voltage sample from NIDaq box as it comes in, find
- * 1) the onset of pvcam expose out
- * 2) the onset and height of diode input rising edge
-*/
-    if (0 > DAQmxReadAnalogF64(hTask, 1, 0.05, DAQmx_Val_GroupByScanNumber, tempBuffer, 2, &read_no, NULL)) {lookupError(); return;}
-    if (read_no > 0) {
-        if (tempBuffer[1] > 2.5) {  // low = 0, high = 5
-            if (cam_is_low) {
-                emit(cameraFrameReady(current_time, phase_per_tick * (current_time - last_diode_signal_time) + last_diode_signal_phase));
-                cam_is_low = false;
-            }
-        } else {
-            if (!cam_is_low) {
-                cam_is_low = true;
-            }
-        }
-
-        diode_diff = tempBuffer[0] - previous_diode;
-        if (diode_diff > 0 && previous_diode_diff <= 0 && !diode_rising) {
-            current_diode_signal_time = current_time;
-            diode_onset_level = previous_diode;
-            diode_rising = true;
-        } else if (diode_diff < 0 && previous_diode_diff >= 0 && diode_rising) {
-            last_diode_signal_time = current_diode_signal_time;
-            double signal = previous_diode - diode_onset_level;
-            quint8 level = -1;
-            // search for the level (category) of diode_signal
-            for (int i=0; i<diode_levels.size() && signal > diode_levels.at(i); i++) level++;
-            emit(yieldDiodeSignal(current_diode_signal_time, signal));
-            if (level == 1) {
-                last_diode_signal_phase += phase_per_pulse;
-            } else if (level == 5) {
-                last_diode_signal_phase = 0;
-            }
-            diode_rising = false;
-        }
-        previous_diode = tempBuffer[0];
-        previous_diode_diff = diode_diff;
-        current_time++;
+    /* Read every voltage sample from NIDaq box as it comes in, find
+     * 1) the offset of pvcam expose out
+     *      the camera outputs high when it is during exposure, and low otherwise
+     * 2) the onset and height of diode input rising edge
+    */
+    int32 read_no;
+    if (0 > DAQmxReadAnalogF64(hTask, 1, 0.05, DAQmx_Val_GroupByScanNumber, temp_buffer, 2, &read_no, NULL)) {lookupError(); return;}
+    if (read_no <= 0) {onError(); return;}  // if read nothing
+    if (temp_buffer[1] < 4.5 && cam_is_high) {  // channel 1 is expose out from camera. low = 0, high = 5
+        cam_is_high = false;
+    } else if (temp_buffer[1] > 4.5 && !cam_is_high) {
+        cam_is_high = true;
+        emit(yieldCameraSignal(current_time, QTime::currentTime().msecsSinceStartOfDay()));
     }
+
+    if (temp_buffer[0] > previous_diode) {
+        if (!diode_is_rising) {
+            diode_is_rising = true;
+            last_diode_signal_time = current_time;
+            diode_baseline = previous_diode;
+        }
+    } else {
+        if (diode_is_rising) {
+            diode_is_rising = false;
+            double signal = previous_diode - diode_baseline;
+            emit(yieldDiodeSignal(last_diode_signal_time, signal));
+        }
+    }
+    previous_diode = temp_buffer[0];
+    current_time++;
 }
 
 bool NIDaqBox::isReady() {
@@ -134,8 +99,8 @@ bool NIDaqBox::isReady() {
 }
 
 int32 CVICALLBACK signalEventCallback (TaskHandle hTask, int32 /*eventType*//*, uInt32 *//*nSamples*/, void *callbackData) {
-/* Move to NIDaqSignalStream, which belongs to NIDaqBox but not initialized in the QThread
-*/
-    (static_cast<NIDaqBox*>(callbackData))->readSample(hTask);
+    /* Move to NIDaqSignalStream, which belongs to NIDaqBox but not initialized in the QThread
+    */
+    (static_cast<NIDaqBox *>(callbackData))->readSample(hTask);
     return 0;
 }

@@ -9,84 +9,77 @@
 #include <hdf5.h>
 #include <hdf5_hl.h>
 #include "recordparams.h"
+#include "regionofinterest.h"
 #include "saveworker.h"
 
-SaveWorker::SaveWorker(QRect roi_in, QObject *parent) : QObject(parent),
-    is_initialized(false), needs_cleanUp(false), roi(roi_in), frame_no(0) {
+SaveWorker::SaveWorker(QObject *parent) : QObject(parent),
+    is_initialized(false), needs_cleanUp(false) {
     params = RecordParams::getParams();
+    roi = RegionOfInterest::getRegion();
 }
 
 void SaveWorker::start() {
     params->lock();
-    QByteArray file_name = params->getFile_path().toLocal8Bit();
+    QByteArray file_name = params->getFilePath().toLocal8Bit();
     hFile = H5Fcreate(file_name.constData(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
     needs_cleanUp = true;
-    int period_in_frames = params->getPeriod_in_frames();
+    int period_in_frames = params->getPeriodInFrames();
     H5LTset_attribute_int(hFile, "/", "period_in_frames", &period_in_frames, 1);
-    int period_in_seconds = params->getPeriod_in_seconds();
+    int period_in_seconds = params->getPeriodInSeconds();
     H5LTset_attribute_int(hFile, "/", "period_in_seconds", &period_in_seconds, 1);
-    int cycle_no = params->getCycle_no();
+    int cycle_no = params->getCycleNo();
     H5LTset_attribute_int(hFile, "/", "cycle_no", &cycle_no, 1);
+    int exposure_time = params->getExposureTime();
+    H5LTset_attribute_int(hFile, "/", "exposure_time", &exposure_time, 1);
 
     // create custom hdf5 data types
-    hsize_t image_dims[2] = {quint64(roi.width()), quint64(roi.height())};
-    H5T_IMAGE = H5Tarray_create(H5T_NATIVE_UINT16, 2, image_dims);
+    QSize size = roi->getSize();
+    hsize_t image_dims[2] = {hsize_t(size.width()), hsize_t(size.height())};
+    hImageType = H5Tarray_create(H5T_NATIVE_UINT16, 2, image_dims);
 
-    hFrames = H5Gcreate(hFile, "frames", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    hPTable = H5PTcreate_fl(hFrames, "frame_table", H5T_IMAGE, 32, -1);
-    int roi_attr[4] = {roi.left(), roi.top(), roi.right(), roi.bottom()};
-    H5LTset_attribute_int(hFile, "frames", "roi", roi_attr, 4);
+    hFrameData = H5PTcreate_fl(hFile, "frame_data", hImageType, 32, -1);
+    QRect rect = roi->getROI();
+    QPoint bins = roi->getBins();
+    int roi_attr[6] = {rect.left(), rect.top(), rect.right(), rect.bottom(), bins.x(), bins.y()};
+    H5LTset_attribute_int(hFrameData, "/", "roi", roi_attr, 6);
 
-    hFrameTimestamp = H5PTcreate_fl(hFrames, "frame_timestamps", H5T_NATIVE_UINT64, 128, 5);
-    hFramePhase = H5PTcreate_fl(hFrames, "frame_phases", H5T_NATIVE_DOUBLE, 128, 5);
+    hFrameTimestamp = H5PTcreate_fl(hFile, "frame_timestamps", H5T_NATIVE_INT, 128, 5);
+
     is_initialized = true;
     emit(started());
 }
 
-void SaveWorker::pushDiodeSignal(quint64 timestamp, double signal_size) {
+void SaveWorker::pushFrame(const int timestamp, ImageArray frame) {
     if (!is_initialized) return;
-    diode_signal<<signal_size;
-    diode_timestamp<<timestamp;
-}
-
-void SaveWorker::pushFrame(const quint64 timestamp, const double frame_phase, ImageArray frame, QRect roi_in) {
-    if (!is_initialized) return;
-    if (!(roi_in == roi)) {
+    if (frame.length() != roi->length()) {
         emit(raiseError("roi != roi_in"));
-        frame_no++;
-        if (frame_no > 100) stop();
         return;
     }
-    H5PTappend(hPTable, 1, frame.constData());
+    H5PTappend(hFrameData, 1, frame.constData());
     H5PTappend(hFrameTimestamp, 1, &timestamp);
-    H5PTappend(hFramePhase, 1, &frame_phase);
     H5Fflush(hFile, H5F_SCOPE_GLOBAL);
-    frame_no++;
-    if (frame_no > 100) stop();
-}
-
-void SaveWorker::cleanUp() {
-    is_initialized = false;
-    H5Fflush(hFile, H5F_SCOPE_GLOBAL);
-    H5PTclose(hFramePhase);
-    H5PTclose(hFrameTimestamp);
-    H5PTclose(hPTable);
-    H5Fclose(hFile);
-    qDebug() << "after cleanup";
-    params->unlock();
-    emit(finished());
 }
 
 void SaveWorker::stop() {
     is_initialized = false;
-    hDiodes = H5Gcreate(hFile, "diodes", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-    hsize_t dims[1] = {quint64(diode_signal.length())};
-    hid_t timestamp_space = H5Screate_simple(1, dims, NULL);
-    hDiodeSignal = H5LTmake_dataset_double(hDiodes, "diode_signal", 1, dims, diode_signal.constData());
-    hDiodeTimestamp = H5Dcreate(hDiodes, "diode_timestamps", H5T_NATIVE_UINT64, timestamp_space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    H5Dwrite(hDiodeTimestamp, H5T_NATIVE_UINT64, H5S_ALL, H5S_ALL, H5P_DEFAULT, diode_timestamp.data());
     H5Fflush(hFile, H5F_SCOPE_GLOBAL);
-    qDebug() << "before cleanup";
-    cleanUp();
+    H5PTclose(hFrameTimestamp);
+    H5PTclose(hFrameData);
+    H5Fclose(hFile);
+    qDebug() << "after saveworker cleanup";
+    params->unlock();
+    roi->unlock();
+    emit(finished());
+}
+
+void SaveWorker::saveDoubleSeries(const DoubleArray array, const QByteArray name) {
+    hsize_t array_dims[1] = {hsize_t(array.length())};
+    H5LTmake_dataset_double(hFile, name.constData(), 1, array_dims, array.constData());
+    qDebug() << "saved " << name;
+}
+
+void SaveWorker::saveIntSeries(const IntArray array, const QByteArray name) {
+    hsize_t array_dims[1] = {hsize_t(array.length())};
+    H5LTmake_dataset_int(hFile, name.constData(), 1, array_dims, array.constData());
+    qDebug() << "saved " << name;
 }

@@ -18,46 +18,48 @@ namespace Ui {
 class MainWindow;
 }
 
-class MainWindow : public QMainWindow
-{
+class MainWindow : public QMainWindow {
     Q_OBJECT
 
-public:
+  public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-signals:
+  signals:
     void takePicture(QString file_path);
     void closeSignal();
+    void stopRecording();
 
-private slots:
-    void onBrowse();
-    void onRecord();
-    void onTakePicture();
+  private slots:
     void recordingFinished();
     void closeEvent(QCloseEvent *event) Q_DECL_OVERRIDE;
+
+    void on_recordButton_released();
+    void on_cameraButton_released();
+    void on_browseFileButton_released();
+    void on_resetROIButton_released();
+    void on_binningButton_released();
 
 private:
     Ui::MainWindow *ui;
 
     void startRecording();
     QErrorMessage error_dialog;
-    RecordParams* params;
+    RecordParams *params;
 
-    QThread* save_thread;
-    SaveWorker* save_worker;
+    QThread *save_thread;
+    SaveWorker *save_worker;
 
     QThread niDaq_thread;
     NIDaqBox niDaq_box;
 
     QThread camera_thread;
     Camera camera;
-    QTimer temp_check_timer;
 
     QThread processing_thread;
     OnlineProcessor processor;
 
-    bool verify_input();
+    bool verifyInput();
 };
 
 #endif // MAINWINDOW_H

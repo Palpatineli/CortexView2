@@ -2,27 +2,31 @@
 #define RECORDPARAMS_H
 
 #include <QString>
-#include <QReadWriteLock>
+#include <QMutex>
 
 class RecordParams
 {
   public:
     static RecordParams *getParams();
 
-    QString getFile_path();
-    void setFile_path(const QString &value);
+    QString getFilePath();
+    void setFilePath(const QString &value);
 
-    int getPeriod_in_frames();
-    void setPeriod_in_frames(int value);
+    int getPeriodInFrames() const;
+    void setPeriodInFrames(const int value);
 
-    double getPeriod_in_seconds();
-    void setPeriod_in_seconds(double value);
+    double getPeriodInSeconds() const;
+    void setPeriodInSeconds(double value);
 
-    int getCycle_no();
-    void setCycle_no(int value);
+    int getCycleNo() const;
+    void setCycleNo(const int value);
 
     bool lock();
     void unlock();
+    bool isLocked() const;
+
+    int getExposureTime() const;
+    void setExposureTime(int value);
 
 private:
     RecordParams();
@@ -30,16 +34,13 @@ private:
     void operator=(RecordParams const&) = delete;           // C++11
 
     QString file_path;
-    QReadWriteLock file_path_lock;
-    int period_in_frames;
-    QReadWriteLock period_in_frames_lock;
+    QMutex file_path_lock;
+    int period_in_frames, exposure_time;
     double period_in_seconds;
-    QReadWriteLock period_in_seconds_lock;
     int cycle_no;
-    QReadWriteLock cycle_no_lock;
 
-    bool is_recording;
-    QReadWriteLock recording_lock;
+    bool is_locked;
+    QMutex lock_lock;
 };
 
 #endif // RECORDPARAMS_H

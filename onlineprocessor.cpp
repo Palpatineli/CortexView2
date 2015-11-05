@@ -1,39 +1,73 @@
 #include <qmath.h>
+#include <cmath>
 #include <QColor>
 #include <QDebug>
 #include <QImageWriter>
+#include <QSettings>
+#include "recordparams.h"
+#include "regionofinterest.h"
 #include "onlineprocessor.h"
 
 OnlineProcessor::OnlineProcessor(QObject *parent) : QObject(parent),
-    take_next_picture(false), is_recording(false), frame_no(0) {
+    take_next_picture(false), is_recording(false), stimulus_started(false), slow_dft_counter(0) {
+    params = RecordParams::getParams();
+    roi = RegionOfInterest::getRegion();
 }
 
-void OnlineProcessor::updateImage(const quint64 /*timestamp*/, const double phase_in, const ImageArray image_in, const QRect roi_in) {
-    if (is_recording && (phase_in > -0.01)) { // phase is -1 before NiDaqbox Starts receiving diode signals
-        if (roi_in != roi) {emit(raiseError("roi_in != roi")); return;}
-        //processFrame(image_in, phase_in);
-        //emit(yieldImage(drawBufferFromDFT(), roi));
-        emit(yieldImage(drawBufferFromRaw(image_in), roi));
-    } else {
-        roi = roi_in;
-        emit(yieldImage(drawBufferFromRaw(image_in), roi));
+void OnlineProcessor::pushImage(const int computer_time, const ImageArray image_in) {
+    if (!stimulus_started) {
+//        double max_value = *(std::max_element(image_in.constBegin(), image_in.constEnd()));
+//        qDebug() << "pushed one image at: " << computer_time << "with max value" << max_value;
+        emit(yieldImage(drawBufferFromRaw(image_in)));
+        return;
     }
+    if (image_in.length() != roi->length()) {emit(raiseError("roi_in != roi")); return;}
+    int timestamp = 0;
+    if (camera_expose_computer_time.length() > 0)  { timestamp = int((computer_time - camera_expose_computer_time.last()) / params->getExposureTime()) * params->getExposureTime() + camera_expose_timestamp.last(); }
+    double phase = (timestamp - diode_timestamp.last()) * phase_per_ms + pulse_id * phase_per_pulse - phase_exposure_offset;
+    processFrame(image_in, phase);
+    if (slow_dft_counter > 10) {  // because drawBufferFromDFT is very slow
+        emit(yieldImage(drawBufferFromDFT()));
+        emit(reportRemainingTime(int((end_time - timestamp)/1000)));
+        slow_dft_counter = 0;
+    }
+    slow_dft_counter++;
+    emit(yieldImageData(timestamp, image_in));
+    if (timestamp > end_time) { stopRecording(); }
+}
+
+void OnlineProcessor::pushDiodeSignal(const int timestamp, const double signal) {
+    if (!is_recording) { return; }  // we don't care about diode signal unless it's recording
+    if (!stimulus_started) {  // recording doesn't start until the first diode signal
+        stimulus_started = true;
+        start_time = timestamp;
+        end_time = start_time + params->getCycleNo() * params->getPeriodInSeconds() * 1000 + 3 * params->getExposureTime();
+        pulse_id = 0;
+    } else {
+        pulse_id ++;
+        if (pulse_id == pulse_per_cycle) { pulse_id = 0; }
+    }
+    diode_timestamp << timestamp;
+    diode_signal << signal;
+}
+
+void OnlineProcessor::pushCameraSignal(const int timestamp, const int computer_time) {
+    if (!stimulus_started) { return; }
+    camera_expose_computer_time << computer_time;
+    camera_expose_timestamp << timestamp;
 }
 
 QImage OnlineProcessor::drawBufferFromRaw(const ImageArray image_in) {
-    QImage image(roi.width(), roi.height(), QImage::Format_Indexed8);
+    QImage image(roi->getSize(), QImage::Format_Indexed8);
     QVector<QRgb> color_table;
     color_table << qRgb(0, 255, 0);
-    for (int i = 1; i < 255; i++) color_table << qRgb(i, i, i);
+    for (int i = 1; i < 255; i++) { color_table << qRgb(i, i, i); }
     color_table << qRgb(255, 0, 0);
     image.setColorTable(color_table);
-
-    int width = roi.width();
-    for (int i = 0; i < roi.height(); i++) {
-        uchar *line = image.scanLine(i);
-        for (int j = 0; j < width; j++) {
-            line[j] = image_in.at(i * width + j) >> 8;
-        }
+    uchar *image_data = image.bits();
+    const quint16 *const image_in_data = image_in.constData();
+    for (int i = 0; i < image_in.length(); i++) {
+        image_data[i] = image_in_data[i] >> 8;
     }
     if (take_next_picture) {
         qDebug() << "write on picture";
@@ -45,54 +79,89 @@ QImage OnlineProcessor::drawBufferFromRaw(const ImageArray image_in) {
     return image;
 }
 
-void OnlineProcessor::processFrame(const ImageArray image_in, qreal phase) {
-    qreal coef_real = qCos(phase);
-    qreal coef_imag = qSin(phase);
-    quint64 length = image_in.length();
-    for (quint64 i = 0; i < length; i++) {
+void OnlineProcessor::processFrame(const ImageArray image_in, const double phase) {
+    double coef_real = qCos(phase);
+    double coef_imag = qSin(phase);
+    int length = image_in.length();
+    for (int i = 0; i < length; i++) {
         imag[i] -= coef_imag * image_in.at(i);
         real[i] += coef_real * image_in.at(i);
     }
 }
 
 QImage OnlineProcessor::drawBufferFromDFT() {
-    QImage image(roi.width(), roi.height(), QImage::Format_ARGB32);
-    DFTArray power_buffer;
+    QImage image(roi->getSize(), QImage::Format_ARGB32);
     int length = real.length();
-    power_buffer.resize(length);
-    for (int i=0; i< length; i++) {
-        qreal x, y; x = real.at(i); y = imag.at(i);
-        power_buffer[i] = qSqrt(x * x + y * y);
-    }
-    qreal max_power = *std::max_element(power_buffer.constBegin(), power_buffer.constEnd());
-    int width = roi.width();
-    for (int i=0; i<roi.height(); i++) {
-        for (int j=0; j<width; j++) {
-            int location = i * width + j;
-            QColor pixel;
-            pixel.fromHsvF(qAtan(imag.at(location) / real.at(location)) * 0.5 * M_1_PI, power_buffer.at(location) / max_power, 1);
-            image.setPixel(j, i, pixel.rgba());
-        }
-    }
+    std::pair<const double *, const double *> minmax_real = std::minmax_element(real.constBegin(), real.constEnd());
+    std::pair<const double *, const double *> minmax_imag = std::minmax_element(imag.constBegin(), imag.constEnd());
+    double max_real = std::max<double>(std::abs(*(minmax_real.first)), std::abs(*(minmax_real.second)));
+    double max_imag = std::max<double>(std::abs(*(minmax_imag.first)), std::abs(*(minmax_imag.second)));
+    double normalizer = std::max<double>(max_real / qSqrt(3), max_imag) / 255.0;
+    uchar *image_data = image.bits();
+    for (int i = 0; i < length; i++) { complex2rgb(real.at(i) / normalizer, imag.at(i) / normalizer, image_data + i * 4); }
     return image;
 }
 
 void OnlineProcessor::startRecording() {
     if (is_recording) {emit(raiseError("attempt to start recording while OnlineProcessor is in recording mode")); return;}
     is_recording = true;
-    real.resize(roi.width() * roi.height());
-    real.clear();
-    imag.resize(roi.width() * roi.height());
-    imag.clear();
+    roi->lock();
+    real.resize(roi->length());
+    imag.resize(roi->length());
+    // clear all the arrays
+    real.fill(0);
+    imag.fill(0);
+    diode_signal.clear();
+    diode_timestamp.clear();
+    camera_expose_computer_time.clear();
+    camera_expose_timestamp.clear();
+    // calculate coefficients for phase calculation
+    phase_per_pulse = (M_PI * 2 * frames_per_pulse) / params->getPeriodInFrames();
+    phase_per_ms = (M_PI * 2) / (params->getPeriodInSeconds() * 1000);
+    phase_exposure_offset = - (phase_per_ms * params->getExposureTime() / 2);
+    pulse_per_cycle = params->getCycleNo() / frames_per_pulse;
 }
 
 void OnlineProcessor::stopRecording() {
     if (!is_recording) {emit(raiseError("attempt to stop recording while OnlineProcessor is not in recording mode")); return;}
     is_recording = false;
+    stimulus_started = false;
+    emit(saveDoubleSeries(diode_signal, "diode_signal"));
+    emit(saveIntSeries(diode_timestamp, "diode_nidaq_time"));
+    emit(saveIntSeries(camera_expose_timestamp, "readout_nidaq_time"));
+    emit(saveIntSeries(camera_expose_computer_time, "readout_computer_time"));
+    emit(finishSaving());
+    emit(reportRemainingTime(0));
 }
 
 void OnlineProcessor::takePicture(QString file_path_in) {
     file_path = file_path_in;
-    qDebug() << "setting write on picture";
     take_next_picture = true;
+}
+
+void OnlineProcessor::complex2rgb(double real_element, double imag_element, uchar *argb_ptr) {
+    static const double tan30 = 1.0f / qSqrt(3);
+    argb_ptr[0] = 0xff;
+    double real_projection = tan30 * real_element;
+    if (real_element > 0) {
+        if (imag_element < 0 && imag_element < -real_projection) {
+            argb_ptr[1] = quint8(-real_projection - imag_element);
+            argb_ptr[2] = 0;
+            argb_ptr[3] = quint8(real_projection - imag_element);
+        } else {
+            argb_ptr[1] = 0;
+            argb_ptr[2] = quint8(real_projection + imag_element);
+            argb_ptr[3] = quint8(real_projection * 2);
+        }
+    } else {
+        if (imag_element < 0 && imag_element < real_projection) {
+            argb_ptr[1] = quint8(-real_projection - imag_element);
+            argb_ptr[2] = 0;
+            argb_ptr[3] = quint8(real_projection - imag_element);
+        } else {
+            argb_ptr[1] = quint8(-2 * real_projection);
+            argb_ptr[2] = quint8(imag_element - real_projection);
+            argb_ptr[3] = 0;
+        }
+    }
 }

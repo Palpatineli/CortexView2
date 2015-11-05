@@ -7,41 +7,39 @@
 #include <QRect>
 
 class RecordParams;
+class RegionOfInterest;
 typedef int hid_t;
 typedef QVector<quint16> ImageArray;
+typedef QVector<int> IntArray;
+typedef QVector<double> DoubleArray;
 
-class SaveWorker : public QObject
-{
+class SaveWorker : public QObject {
     Q_OBJECT
-public:
-    explicit SaveWorker(QRect roi, QObject *parent = 0);
+  public:
+    explicit SaveWorker(QObject *parent = 0);
 
-signals:
+  signals:
     void started();
     void finished();
     void raiseError(QString error_message);
 
-public slots:
-    void pushFrame(const quint64 timestamp, const double frame_phase, ImageArray frame, QRect roi_in);
-    void pushDiodeSignal(quint64 timestamp, double signal_size);
+  public slots:
+    void pushFrame(const int timestamp, ImageArray frame);
+    void saveIntSeries(const IntArray array, const QByteArray name);
+    void saveDoubleSeries(const DoubleArray array, const QByteArray name);
     void start();
     void stop();
 
-private:
+  private:
     // HDF5 related
     hid_t hFile;
-    hid_t hFrames, hPTable, hFrameTimestamp, hFramePhase;
-    hid_t hDiodes, hDiodeTimestamp, hDiodeSignal;
-    hid_t H5T_IMAGE;
+    hid_t hFrameData, hFrameTimestamp;
+    hid_t hImageType;
 
     bool is_initialized, needs_cleanUp;
-    RecordParams* params;
-    QRect roi;
-    QVector<quint64> diode_timestamp;
-    QVector<double> diode_signal;
-    quint64 frame_no;
+    RecordParams *params;
+    RegionOfInterest* roi;
 
-    void cleanUp();
     void finishSaving();
 };
 

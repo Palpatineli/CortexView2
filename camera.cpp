@@ -3,12 +3,14 @@
 #include <QDebug>
 #include <QTime>
 #include "recordparams.h"
+#include "regionofinterest.h"
 
 #include "camera.h"
 
 Camera::Camera(QObject *parent) : QObject(parent),
-    callback_registered(false), is_initialized(false), needs_clean_up(false), ccd_size(0, 0, 512, 512), roi(0, 0, 512, 512), is_running(false), debug_counter(0) {
+    callback_registered(false), is_initialized(false), needs_clean_up(false), is_running(false) {
     params = RecordParams::getParams();
+    roi = RegionOfInterest::getRegion();
 }
 
 Camera::~Camera() {
@@ -20,25 +22,20 @@ void Camera::init() {
 // initialize PVcam
     if (PV_FAIL == pl_pvcam_init()) {onError("pl_pvcam_init()"); return;}
     needs_clean_up = true;
+    quint16 pvcam_version;
+    if (PV_FAIL == pl_pvcam_get_ver(&pvcam_version)) {onError("pl_pvcam_get_ver()"); return;}
+    qDebug() << "PVCAM version" << ((pvcam_version & 0xFF00) >> 8) << ((pvcam_version & 0xF0) >> 4) << (pvcam_version & 0xF);
     if (PV_FAIL == pl_exp_init_seq()) {onError("pl_exp_init_seq()"); return;}
     qint16 camera_number = 0;
     if (PV_FAIL == pl_cam_get_total(&camera_number)) {onError("pl_cam_get_total()"); return;}
     if (camera_number == 0) {onError("camera_number == 0"); return;}
     camera_name.resize(CAM_NAME_LEN);
     if (PV_FAIL == pl_cam_get_name(0, camera_name.data())) {onError("pl_cam_get_name()"); return;}
-// open camera
+    // open camera
     if (PV_FAIL == pl_cam_open(camera_name.data(), &hCam, OPEN_EXCLUSIVE)) {onError("pl_cam_open()"); return;}
-// I skip the whole get device driver version thing here
-    if (!initCCDSize()) return;
-// I skip the time table thing and not use the initSpeedTable function because the table is there in the cascade512B manual
-// set clear mode and cycle number
-    int clear_mode = CLEAR_PRE_SEQUENCE;
-    setParam(PARAM_CLEAR_MODE, "PARAM_CLEAR_MODE", &clear_mode);
-    quint16 clear_cycle_no = 2;
-    setParam(PARAM_CLEAR_CYCLES, "PARAM_CLEAR_CYCLES", &clear_cycle_no);
-// enable on chip multiplier gain because it is claimed to reduce read noise (if it is possible)
-    int shutter_mode = OPEN_PRE_EXPOSURE;
-    setParam(PARAM_SHTR_OPEN_MODE, "PARAM_SHTR_OPEN_MODE", &shutter_mode);
+    if (!initCameraInfo()) return;
+
+    // set frame transfer mode
     rs_bool is_frame_transfer;
     if (!assertParamAvailability(PARAM_FRAME_CAPABLE, "PARAM_FRAME_CAPABLE")) return;
     pl_get_param(hCam, PARAM_FRAME_CAPABLE, ATTR_CURRENT, &is_frame_transfer);
@@ -46,15 +43,30 @@ void Camera::init() {
         int p_mode = PMODE_FT;
         setParam(PARAM_PMODE, "PARAM_PMODE", &p_mode);
     }
-    rs_bool can_circ_buffer;
-    pl_get_param(hCam, PARAM_CIRC_BUFFER, ATTR_AVAIL, &can_circ_buffer);
-    qDebug() << "can use circular buffer" << can_circ_buffer;
+
+    // set readout speed and bit depth
     uns32 readout_port = 0;
-    setParam(PARAM_READOUT_PORT, "PARAM_READOUT_PORT", &readout_port);
+    if (!setParam(PARAM_READOUT_PORT, "PARAM_READOUT_PORT", &readout_port)) return;
     int16 speed_table_index = 0;
-    setParam(PARAM_SPDTAB_INDEX, "PARAM_SPDTAB_INDEX", &speed_table_index);
-    int16 pixel_depth = 16;
-    setParam(PARAM_BIT_DEPTH, "PARAM_BIT_DEPTH", &pixel_depth);
+    if (!setParam(PARAM_SPDTAB_INDEX, "PARAM_SPDTAB_INDEX", &speed_table_index)) return;
+    int16 pixel_depth;
+    if (PV_FAIL == pl_get_param(hCam, PARAM_BIT_DEPTH, ATTR_CURRENT, &pixel_depth)) {onError("pl_get_param(PARAM_BIT_DEPTH"); return;}
+    qDebug() << "pixel depth at: " << pixel_depth;
+
+    if (!initCCDSize()) return;
+    // set clear mode and cycle number
+    int clear_mode = CLEAR_PRE_SEQUENCE;
+    setParam(PARAM_CLEAR_MODE, "PARAM_CLEAR_MODE", &clear_mode);
+    quint16 clear_cycle_no = 2;
+    setParam(PARAM_CLEAR_CYCLES, "PARAM_CLEAR_CYCLES", &clear_cycle_no);
+    int shutter_mode = OPEN_PRE_EXPOSURE;
+    setParam(PARAM_SHTR_OPEN_MODE, "PARAM_SHTR_OPEN_MODE", &shutter_mode);
+
+    // if temperature higher than -20 abort
+//    int16 temperture;
+//    if (PV_FAIL == pl_get_param(hCam, PARAM_TEMP, ATTR_CURRENT, &temperture)) {onError("pl_get_param(PARAM_TEMP)"); return;}
+//    if (temperture > -2000) {onError("temperature too high"); return;}
+
     uns32 readout_time;
     if (PV_FAIL == pl_get_param(hCam, PARAM_READOUT_TIME, ATTR_CURRENT, &readout_time)) {onError("pl_get_param(PARAM_PAR_SIZE)"); return;}
     qDebug() << "readout time (ns): " << readout_time;
@@ -65,32 +77,30 @@ void Camera::init() {
     startAcquisition();
 }
 
-void Camera::rect2rgn(const QRect &source, rgn_type &dest) {
-    dest.p1 = source.left();
-    dest.p2 = source.right();
-    dest.pbin = 1;
-    dest.s1 = source.top();
-    dest.s2 = source.bottom();
-    dest.sbin = 1;
-}
-
-void Camera::rgn2rect(const rgn_type &source, QRect &dest) {
-    dest.setLeft(source.p1);
-    dest.setRight(source.p2);
-    dest.setTop(source.s1);
-    dest.setBottom(source.s2);
+bool Camera::initCameraInfo() {
+    quint16 driver_version;
+    if (PV_FAIL == pl_get_param(hCam, PARAM_DD_VERSION, ATTR_CURRENT, &driver_version)) {onError("pl_get_param(PARAM_DD_VERSION)"); return false;}
+    qDebug() << "Driver Version" << ((driver_version & 0xFF00) >> 8) << ((driver_version & 0xF0) >> 4) << (driver_version & 0xF);
+    QByteArray ccd_name;
+    ccd_name.resize(CCD_NAME_LEN);
+    if (PV_FAIL == pl_get_param(hCam, PARAM_CHIP_NAME, ATTR_CURRENT, ccd_name.data())) {onError("pl_get_param(PARAM_CHIP_NAME"); return false;}
+    qDebug() << "CCD Chip name" << ccd_name;
+    // firmware version
+    quint16 firmware_version;
+    if (PV_FAIL == pl_get_param(hCam, PARAM_CAM_FW_VERSION, ATTR_CURRENT, &firmware_version)) {onError("pl_get_param(PARAM_CAM_FW_VERSION)"); return false;}
+    qDebug() << "Firmware version:" << ((firmware_version & 0xFF00) >> 8) << (firmware_version & 0xFF);
+    return true;
 }
 
 void Camera::startAcquisition() {
     if (!is_initialized || is_running) return;
-    rgn_type rgn_roi;
-    rect2rgn(roi, rgn_roi);
-    uns32 stream_size;
-    if (PV_FAIL == pl_exp_setup_cont(hCam, 1, &rgn_roi, TIMED_MODE, 40, &stream_size, CIRC_OVERWRITE)) {onError("pl_exp_setup_cont()"); return;}
-    frame_size = stream_size / 2;  // sizeof(uint16) = 2
-    circ_buffer = new quint16[CIRCULAR_BUFFER_FRAME_NO * frame_size + 1];
-    qDebug() << "allocated buffer total " << CIRCULAR_BUFFER_FRAME_NO * stream_size << ", each frame size " << stream_size;
-    if (PV_FAIL == pl_exp_start_cont(hCam, circ_buffer, CIRCULAR_BUFFER_FRAME_NO * stream_size)) {onError("pl_exp_start_cont()"); return;}
+    rgn_type rgn_roi = roi->getRGN();
+    qDebug() << "rect set" << rgn_roi.p1 << rgn_roi.p2 << rgn_roi.pbin << rgn_roi.s1 << rgn_roi.s2 << rgn_roi.sbin;
+    quint32 stream_size;
+    if (PV_FAIL == pl_exp_setup_cont(hCam, 1, &rgn_roi, TIMED_MODE, params->getExposureTime(), reinterpret_cast<uns32_ptr>(&stream_size), CIRC_OVERWRITE)) {onError("pl_exp_setup_cont()"); return;}
+    frame_size = stream_size / sizeof(quint16);  // sizeof(uint16) = 2
+    buffer = QVector<quint16>(CIRCULAR_BUFFER_FRAME_NO * frame_size);
+    if (PV_FAIL == pl_exp_start_cont(hCam, buffer.data(), CIRCULAR_BUFFER_FRAME_NO * frame_size)) {onError("pl_exp_start_cont()"); return;}
     is_running = true;
     qDebug() << "camera started";
 }
@@ -98,7 +108,6 @@ void Camera::startAcquisition() {
 void Camera::stopAcquisition() {
     if (!is_initialized || !is_running) return;
     if (PV_FAIL == pl_exp_stop_cont(hCam, CCS_HALT)) {lookUpError("pl_exp_stop_cont"); return;}
-    delete[] circ_buffer;
     is_running = false;
     qDebug() << "camera stopped";
 }
@@ -116,11 +125,11 @@ bool Camera::setParam(quint32 param_id, QString param_name, void *param_value_pt
     if (!assertParamAvailability(param_id, param_name)) return false;
     if (PV_FAIL == pl_get_param(hCam, param_id, ATTR_ACCESS, &access_type)) {onError("pl_get_param(" + param_name + ", ATTR_ACCESS)"); return false;}
     if (access_type == ACC_READ_WRITE) {
-        if (PV_FAIL == pl_set_param(hCam, param_id, param_value_ptr)) {onError("pl_set_param("+ param_name + ")"); return false;}
+        if (PV_FAIL == pl_set_param(hCam, param_id, param_value_ptr)) {onError("pl_set_param(" + param_name + ")"); return false;}
         qDebug() << "set " << param_name;
         return true;
     }
-    return false;
+    return true;
 }
 
 bool Camera::initCCDSize() {
@@ -129,9 +138,7 @@ bool Camera::initCCDSize() {
     if (PV_FAIL == pl_get_param(hCam, PARAM_SER_SIZE, ATTR_CURRENT, &resolution_x)) {onError("pl_get_param(PARAM_SER_SIZE)"); return false;}
     if (!assertParamAvailability(PARAM_PAR_SIZE, "PARAM_PAR_SIZE")) return false;
     if (PV_FAIL == pl_get_param(hCam, PARAM_PAR_SIZE, ATTR_CURRENT, &resolution_y)) {onError("pl_get_param(PARAM_PAR_SIZE)"); return false;}
-    if (resolution_x < 512) ccd_size.setRight(resolution_x);
-    if (resolution_y < 512) ccd_size.setBottom(resolution_y);
-    roi = ccd_size;
+    roi->setROILimit(QRect(0, 0, resolution_x, resolution_y));
     return true;
 }
 
@@ -167,7 +174,7 @@ QVector<QPair<qint32, QByteArray>> Camera::enumerateParameter(quint32 param_id, 
     if (!assertParamAvailability(param_id, param_name)) return result;
     quint32 param_count;
     pl_get_param(hCam, param_id, ATTR_COUNT, &param_count);
-    for (quint32 i=0; i<param_count;i++) {
+    for (quint32 i = 0; i < param_count; i++) {
         QByteArray enum_name;
         uns32 enum_length;
         pl_enum_str_length(hCam, param_id, i, &enum_length);
@@ -205,49 +212,41 @@ void Camera::cleanup() {
     needs_clean_up = false;
 }
 
-void Camera::setROI(const QRect &roi_in) {
-    if (!params->lock()) {
-        emit(raiseError("ROI cannot be changed duing recording!"));
-    } else {
-        if (is_running) {
-            stopAcquisition();
-            roi = roi_in;
-            startAcquisition();
-        } else roi = roi_in;
-        params->unlock();
+void Camera::setROI() {
+    if (roi->isLocked()) {
+        emit(raiseError("ROI cannot be changed during recording!"));
+    } else if (is_running) {
+        stopAcquisition();
+        startAcquisition();
     }
 }
 
 void Camera::captureFrame() {
-    if (!is_running || !is_initialized) return;
+    qint16 status;
+    quint32 byte_count, buffer_count;
+    if (PV_FAIL == pl_exp_check_cont_status(hCam, &status, reinterpret_cast<uns32_ptr>(&byte_count), reinterpret_cast<uns32_ptr>(&buffer_count))) {onError("pl_exp_check_cont_status"); return;}
+    if (status == READOUT_FAILED) {onError("readout failed"); return;}
+    if (status != READOUT_COMPLETE) {qDebug() << "readout attempt too early"; return;}
     QVector<quint16> image(frame_size);
-    void *temp_data_ptr;
-    if (PV_FAIL == pl_exp_get_oldest_frame(hCam, &temp_data_ptr)) {onError("pl_exp_get_oldest_frame"); return;}
-    quint16 *data_ptr = static_cast<quint16 *>(temp_data_ptr);
-    std::copy(data_ptr, data_ptr + frame_size - 1, image.data());
-    if (PV_FAIL == pl_exp_unlock_oldest_frame(hCam)) {onError("pl_exp_unlock_oldest_frame"); return;}
-    debug_counter++;
-    qDebug() << "emitted " << debug_counter << " frame at " << QTime::currentTime().msec();
-    emit(yieldFrame(0, 0, image, roi));
+    quint16 *frame_address; if (PV_FAIL == pl_exp_get_latest_frame(hCam, reinterpret_cast<void **>(&frame_address))) {onError("pl_exp_get_latest_frame"); return;} std::copy(frame_address, frame_address + frame_size - 1, image.data());
+    emit(yieldFrame(QTime::currentTime().msecsSinceStartOfDay(), image));
 }
 
 void Camera::checkTemp() {
-    // get temperature
-    if (!is_initialized) return;
-    if (!assertParamAvailability(PARAM_TEMP, "PARAM_TEMP")) return;
+    /* get temperature
+     */
+    if (!is_initialized || params->isLocked()) return;
+    stopAcquisition();
     int16 temp;
     if (PV_FAIL == pl_get_param(hCam, PARAM_TEMP, ATTR_CURRENT, &temp)) {onError("PARAM_TEMP"); return;}
-    emit(yieldTemperature(int(temp/100)));
-}
-
-QRect Camera::getROI() const {
-    return roi;
+    startAcquisition();
+    emit(yieldTemperature(int(temp / 100)));
 }
 
 bool Camera::isReady() const {
     return is_running;
 }
 
-void camCallback(void* content) {
-    static_cast<Camera*>(content)->captureFrame();
+void camCallback(void *content) {
+    static_cast<Camera *>(content)->captureFrame();
 }

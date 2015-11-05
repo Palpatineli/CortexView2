@@ -1,52 +1,53 @@
 #ifndef CAMERAVIEW_H
 #define CAMERAVIEW_H
 
-#include <QPixmap>
+#include <QImage>
 #include <QWidget>
-#include <QVector>
 #include <QBasicTimer>
 
 class QReadWriteLock;
+class RegionOfInterest;
 
-class CameraView : public QWidget
-{
+class CameraView : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit CameraView(QWidget *parent = 0);
     ~CameraView();
 
     void updateStatus(const QString status, const Qt::GlobalColor status_color);
+    void resetROI();
+    bool toggleBin(bool is2by2);
 
-signals:
-    void roiChangeEvent(const QRect new_roi);
+  signals:
+    void roiChanged();
 
-public slots:
-    void updateImage(const QImage image_in, const QRect draw_roi);
-    void setROI(const QRect new_roi = QRect(0, 0, 512, 512));
+  public slots:
+    void updateImage(const QImage image_in);
+    void updateRemainingTime(const int seconds);
 
-protected:
+  protected:
     void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE;
     void mousePressEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
     void mouseMoveEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
     void mouseReleaseEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
     void timerEvent(QTimerEvent *event) Q_DECL_OVERRIDE;  // update on timer
 
-private:
-    const QColor TRANSPARENT_BLACK = QColor(0, 0, 0, 127);
-
+  private:
     QBasicTimer timer;
-    QReadWriteLock* lock;
+    QReadWriteLock *lock;
     QImage image;
 
     QPoint dragStart;
-    QRect draw_roi, roi;
+    RegionOfInterest* roi;
+    QRect draw_roi;
     bool is_drawing_roi, is_needing_redraw, is_waiting_incoming;
-    QVector<QRect> roi_inverse;
 
     QString status;
+    QString time_str;
     Qt::GlobalColor status_color;
 
     void paintStatus();
+    void setROI(QRect new_roi);
 };
 
 #endif // CAMERAVIEW_H
