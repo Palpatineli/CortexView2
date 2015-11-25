@@ -33,7 +33,7 @@ void RegionOfInterest::setROI(const QRect &value) {
 void RegionOfInterest::setROI(const int x, const int y, const int width, const int height) {
     if (is_locked) return;
     QWriteLocker locker(&roi_lock);
-    roi.setCoords(x, y, x+width-1, y+height-1);
+    roi.setRect(x, y, width, height);
     roi = roi.normalized();
     validateROI();
 }
@@ -42,6 +42,7 @@ void RegionOfInterest::setROI(const rgn_type &rgn_in) {
     if (is_locked) return;
     QWriteLocker locker(&roi_lock);
     roi.setCoords(rgn_in.s1, rgn_in.p1, rgn_in.s2, rgn_in.p2);
+    roi = roi.normalized();
     x_bin = rgn_in.sbin;
     y_bin = rgn_in.pbin;
     validateROI();
@@ -66,7 +67,7 @@ void RegionOfInterest::setROILimit(const QRect &value) {
 void RegionOfInterest::setROILimit(const int x, const int y, const int width, const int height) {
     if (is_locked) return;
     QWriteLocker locker(&roi_lock);
-    roi_limit.setCoords(x, y, x+width-1, y+height-1);
+    roi_limit.setRect(x, y, width, height);
     roi_limit = roi_limit.normalized();
     validateROI();
 }
@@ -116,7 +117,7 @@ void RegionOfInterest::reset() {
 bool RegionOfInterest::validateROI() {
     if (!roi_limit.contains(roi)) roi &= roi_limit;
     if (roi.width() % x_bin != 0) {
-        int width = (int(roi.width() / x_bin) + 1) * x_bin;
+        int width = roi.width() + x_bin - roi.width() % x_bin;
         if (width + roi.x() - 1 > roi_limit.right()) {
             width -= x_bin;
             if (width <= 0) return false;
@@ -124,7 +125,7 @@ bool RegionOfInterest::validateROI() {
         roi.setWidth(width);
     }
     if (roi.height() % x_bin != 0) {
-        int height = (int(roi.height() / y_bin) + 1) * y_bin;
+        int height = roi.height() + y_bin - roi.height() % y_bin;
         if (height + roi.y() - 1 > roi_limit.bottom()) {
             height -= y_bin;
             if (height <= 0) return false;

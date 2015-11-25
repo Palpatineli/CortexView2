@@ -16,8 +16,6 @@ OnlineProcessor::OnlineProcessor(QObject *parent) : QObject(parent),
 
 void OnlineProcessor::pushImage(const int computer_time, const ImageArray image_in) {
     if (!stimulus_started) {
-//        double max_value = *(std::max_element(image_in.constBegin(), image_in.constEnd()));
-//        qDebug() << "pushed one image at: " << computer_time << "with max value" << max_value;
         emit(yieldImage(drawBufferFromRaw(image_in)));
         return;
     }
@@ -64,10 +62,14 @@ QImage OnlineProcessor::drawBufferFromRaw(const ImageArray image_in) {
     for (int i = 1; i < 255; i++) { color_table << qRgb(i, i, i); }
     color_table << qRgb(255, 0, 0);
     image.setColorTable(color_table);
-    uchar *image_data = image.bits();
     const quint16 *const image_in_data = image_in.constData();
-    for (int i = 0; i < image_in.length(); i++) {
-        image_data[i] = image_in_data[i] >> 8;
+    int image_height = image.height();
+    int image_width = image.width();
+    for (int i = 0; i < image_height; i++) {
+        uchar *line = image.scanLine(i);
+        int line_start = i * image_width;
+        for (int j = 0; j < image_width; j++)
+            line[j] = image_in_data[line_start + j] >> 8;
     }
     if (take_next_picture) {
         qDebug() << "write on picture";

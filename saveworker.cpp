@@ -32,16 +32,17 @@ void SaveWorker::start() {
     int exposure_time = params->getExposureTime();
     H5LTset_attribute_int(hFile, "/", "exposure_time", &exposure_time, 1);
 
-    // create custom hdf5 data types
-    QSize size = roi->getSize();
-    hsize_t image_dims[2] = {hsize_t(size.width()), hsize_t(size.height())};
-    hImageType = H5Tarray_create(H5T_NATIVE_UINT16, 2, image_dims);
-
-    hFrameData = H5PTcreate_fl(hFile, "frame_data", hImageType, 32, -1);
     QRect rect = roi->getROI();
     QPoint bins = roi->getBins();
     int roi_attr[6] = {rect.left(), rect.top(), rect.right(), rect.bottom(), bins.x(), bins.y()};
-    H5LTset_attribute_int(hFrameData, "/", "roi", roi_attr, 6);
+    H5LTset_attribute_int(hFile, "/", "roi", roi_attr, 6);
+
+    // create custom hdf5 data types
+    QSize size = roi->getSize();
+    hsize_t image_dims[2] = {hsize_t(size.height()), hsize_t(size.width())};
+    hImageType = H5Tarray_create(H5T_NATIVE_UINT16, 2, image_dims);
+
+    hFrameData = H5PTcreate_fl(hFile, "frame_data", hImageType, 32, -1);
 
     hFrameTimestamp = H5PTcreate_fl(hFile, "frame_timestamps", H5T_NATIVE_INT, 128, 5);
 

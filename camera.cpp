@@ -84,7 +84,6 @@ bool Camera::initCameraInfo() {
     QByteArray ccd_name;
     ccd_name.resize(CCD_NAME_LEN);
     if (PV_FAIL == pl_get_param(hCam, PARAM_CHIP_NAME, ATTR_CURRENT, ccd_name.data())) {onError("pl_get_param(PARAM_CHIP_NAME"); return false;}
-    qDebug() << "CCD Chip name" << ccd_name;
     // firmware version
     quint16 firmware_version;
     if (PV_FAIL == pl_get_param(hCam, PARAM_CAM_FW_VERSION, ATTR_CURRENT, &firmware_version)) {onError("pl_get_param(PARAM_CAM_FW_VERSION)"); return false;}
@@ -95,14 +94,13 @@ bool Camera::initCameraInfo() {
 void Camera::startAcquisition() {
     if (!is_initialized || is_running) return;
     rgn_type rgn_roi = roi->getRGN();
-    qDebug() << "rect set" << rgn_roi.p1 << rgn_roi.p2 << rgn_roi.pbin << rgn_roi.s1 << rgn_roi.s2 << rgn_roi.sbin;
     quint32 stream_size;
     if (PV_FAIL == pl_exp_setup_cont(hCam, 1, &rgn_roi, TIMED_MODE, params->getExposureTime(), reinterpret_cast<uns32_ptr>(&stream_size), CIRC_OVERWRITE)) {onError("pl_exp_setup_cont()"); return;}
     frame_size = stream_size / sizeof(quint16);  // sizeof(uint16) = 2
+    qDebug() << "frame_size" << frame_size;
     buffer = QVector<quint16>(CIRCULAR_BUFFER_FRAME_NO * frame_size);
     if (PV_FAIL == pl_exp_start_cont(hCam, buffer.data(), CIRCULAR_BUFFER_FRAME_NO * frame_size)) {onError("pl_exp_start_cont()"); return;}
     is_running = true;
-    qDebug() << "camera started";
 }
 
 void Camera::stopAcquisition() {
@@ -227,8 +225,10 @@ void Camera::captureFrame() {
     if (PV_FAIL == pl_exp_check_cont_status(hCam, &status, reinterpret_cast<uns32_ptr>(&byte_count), reinterpret_cast<uns32_ptr>(&buffer_count))) {onError("pl_exp_check_cont_status"); return;}
     if (status == READOUT_FAILED) {onError("readout failed"); return;}
     if (status != READOUT_COMPLETE) {qDebug() << "readout attempt too early"; return;}
-    QVector<quint16> image(frame_size);
-    quint16 *frame_address; if (PV_FAIL == pl_exp_get_latest_frame(hCam, reinterpret_cast<void **>(&frame_address))) {onError("pl_exp_get_latest_frame"); return;} std::copy(frame_address, frame_address + frame_size - 1, image.data());
+    ImageArray image(frame_size);
+    quint16 *frame_address;
+    if (PV_FAIL == pl_exp_get_latest_frame(hCam, reinterpret_cast<void **>(&frame_address))) {onError("pl_exp_get_latest_frame"); return;}
+    std::copy(frame_address, frame_address + frame_size, image.data());
     emit(yieldFrame(QTime::currentTime().msecsSinceStartOfDay(), image));
 }
 

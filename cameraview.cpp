@@ -119,5 +119,5 @@ bool CameraView::toggleBin(bool is2by2) {
 void CameraView::updateRemainingTime(int seconds) {
     int minutes = int(seconds / 60);
     seconds -= minutes * 60;
-    time_str = QString("%1:%2").arg(minutes).arg(seconds);
+    time_str = QString("%1:%2").arg(minutes).arg(seconds, 2, 10, QChar('0'));
 }

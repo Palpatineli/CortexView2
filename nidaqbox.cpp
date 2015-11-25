@@ -77,7 +77,7 @@ void NIDaqBox::readSample(TaskHandle hTask) {
         emit(yieldCameraSignal(current_time, QTime::currentTime().msecsSinceStartOfDay()));
     }
 
-    if (temp_buffer[0] > previous_diode) {
+    if (temp_buffer[0] - previous_diode > 0.005) {
         if (!diode_is_rising) {
             diode_is_rising = true;
             last_diode_signal_time = current_time;
@@ -87,7 +87,7 @@ void NIDaqBox::readSample(TaskHandle hTask) {
         if (diode_is_rising) {
             diode_is_rising = false;
             double signal = previous_diode - diode_baseline;
-            emit(yieldDiodeSignal(last_diode_signal_time, signal));
+            if (signal > 0.05) emit(yieldDiodeSignal(last_diode_signal_time, signal));
         }
     }
     previous_diode = temp_buffer[0];
