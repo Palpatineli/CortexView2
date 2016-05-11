@@ -37,13 +37,12 @@ class OnlineProcessor : public QObject {
     void takePicture(QString file_path);
 
   private:
-    const quint32 frames_per_pulse = 9;
-
-    int slow_dft_counter;
+    int timer_refresh_counter;
 
     RegionOfInterest* roi;
     DoubleArray real;
     DoubleArray imag;
+    DoubleArray ave;
     QString file_path;
     bool is_recording, take_next_picture, stimulus_started;
     RecordParams *params;
@@ -56,6 +55,7 @@ class OnlineProcessor : public QObject {
     // online analysis of frame phase
     IntArray diode_timestamp;
     DoubleArray diode_signal;
+    DoubleArray camera_phase;
     IntArray camera_expose_timestamp;
     IntArray camera_expose_computer_time;
 
@@ -64,5 +64,7 @@ class OnlineProcessor : public QObject {
     QImage drawBufferFromDFT();
 
 };
+
+void polar2rgb(double angle, double power, uchar* rgb_ptr);
 
 #endif // ONLINEPROCESSOR_H

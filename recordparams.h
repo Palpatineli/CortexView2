@@ -28,6 +28,9 @@ class RecordParams
     int getExposureTime() const;
     void setExposureTime(int value);
 
+    int getFramePerPulse() const;
+    void setFramePerPulse(int value);
+
 private:
     RecordParams();
     RecordParams(RecordParams const&) = delete;             // C++11
@@ -35,7 +38,7 @@ private:
 
     QString file_path;
     QMutex file_path_lock;
-    int period_in_frames, exposure_time;
+    int period_in_frames, exposure_time, frame_per_pulse;
     double period_in_seconds;
     int cycle_no;
 

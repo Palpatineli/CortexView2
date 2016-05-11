@@ -133,7 +133,7 @@
     <widget class="QSpinBox" name="cycleNoSpin">
      <property name="geometry">
       <rect>
-       <x>419</x>
+       <x>360</x>
        <y>34</y>
        <width>45</width>
        <height>18</height>
@@ -183,7 +183,7 @@
       <rect>
        <x>210</x>
        <y>34</y>
-       <width>50</width>
+       <width>40</width>
        <height>18</height>
       </rect>
      </property>
@@ -238,7 +238,7 @@
     <widget class="QDoubleSpinBox" name="periodSpinInS">
      <property name="geometry">
       <rect>
-       <x>327</x>
+       <x>290</x>
        <y>34</y>
        <width>55</width>
        <height>18</height>
@@ -262,7 +262,7 @@
     <widget class="QLabel" name="label">
      <property name="geometry">
       <rect>
-       <x>262</x>
+       <x>252</x>
        <y>34</y>
        <width>40</width>
        <height>18</height>
@@ -280,7 +280,7 @@
     <widget class="QLabel" name="label_2">
      <property name="geometry">
       <rect>
-       <x>384</x>
+       <x>347</x>
        <y>34</y>
        <width>10</width>
        <height>18</height>
@@ -298,7 +298,7 @@
     <widget class="QLabel" name="label_3">
      <property name="geometry">
       <rect>
-       <x>466</x>
+       <x>407</x>
        <y>34</y>
        <width>36</width>
        <height>18</height>
@@ -350,6 +350,38 @@
      </property>
      <property name="checked">
       <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QSpinBox" name="framePerPulse">
+     <property name="geometry">
+      <rect>
+       <x>440</x>
+       <y>34</y>
+       <width>30</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="minimum">
+      <number>1</number>
+     </property>
+     <property name="maximum">
+      <number>12</number>
+     </property>
+     <property name="value">
+      <number>6</number>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_4">
+     <property name="geometry">
+      <rect>
+       <x>472</x>
+       <y>34</y>
+       <width>47</width>
+       <height>18</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>pulse</string>
      </property>
     </widget>
    </widget>

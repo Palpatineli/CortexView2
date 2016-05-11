@@ -8,8 +8,56 @@
 #include "regionofinterest.h"
 #include "onlineprocessor.h"
 
+void polar2rgb(double angle, int value, uchar *argb_ptr) {
+    double ff;
+    uchar t, q;
+    long i;
+    argb_ptr[0] = 255;
+
+    if(angle >= 360.0) angle = 0.0;
+    angle /= 60.0;
+    i = (long)angle;
+    ff = angle - i;
+    q = value * (1.0 - ff);
+    t = value * ff;
+
+    switch(i) {
+    case 0:
+        argb_ptr[1] = value;
+        argb_ptr[2] = t;
+        argb_ptr[3] = 0;
+        break;
+    case 1:
+        argb_ptr[1] = q;
+        argb_ptr[2] = value;
+        argb_ptr[3] = 0;
+        break;
+    case 2:
+        argb_ptr[1] = 0;
+        argb_ptr[2] = value;
+        argb_ptr[3] = t;
+        break;
+    case 3:
+        argb_ptr[1] = 0;
+        argb_ptr[2] = q;
+        argb_ptr[3] = value;
+        break;
+    case 4:
+        argb_ptr[1] = t;
+        argb_ptr[2] = 0;
+        argb_ptr[3] = value;
+        break;
+    case 5:
+    default:
+        argb_ptr[1] = value;
+        argb_ptr[2] = 0;
+        argb_ptr[3] = q;
+        break;
+    }
+}
+
 OnlineProcessor::OnlineProcessor(QObject *parent) : QObject(parent),
-    take_next_picture(false), is_recording(false), stimulus_started(false), slow_dft_counter(0) {
+    take_next_picture(false), is_recording(false), stimulus_started(false), timer_refresh_counter(0) {
     params = RecordParams::getParams();
     roi = RegionOfInterest::getRegion();
 }
@@ -23,13 +71,14 @@ void OnlineProcessor::pushImage(const int computer_time, const ImageArray image_
     int timestamp = 0;
     if (camera_expose_computer_time.length() > 0)  { timestamp = int((computer_time - camera_expose_computer_time.last()) / params->getExposureTime()) * params->getExposureTime() + camera_expose_timestamp.last(); }
     double phase = (timestamp - diode_timestamp.last()) * phase_per_ms + pulse_id * phase_per_pulse - phase_exposure_offset;
+    camera_phase << phase;
     processFrame(image_in, phase);
-    if (slow_dft_counter > 10) {  // because drawBufferFromDFT is very slow
-        emit(yieldImage(drawBufferFromDFT()));
+    if (timer_refresh_counter > 10) {  // because drawBufferFromDFT is very slow
+        emit(yieldImage(drawBufferFromRaw(image_in)));
         emit(reportRemainingTime(int((end_time - timestamp)/1000)));
-        slow_dft_counter = 0;
+        timer_refresh_counter = 0;
     }
-    slow_dft_counter++;
+    timer_refresh_counter++;
     emit(yieldImageData(timestamp, image_in));
     if (timestamp > end_time) { stopRecording(); }
 }
@@ -58,8 +107,11 @@ void OnlineProcessor::pushCameraSignal(const int timestamp, const int computer_t
 QImage OnlineProcessor::drawBufferFromRaw(const ImageArray image_in) {
     QImage image(roi->getSize(), QImage::Format_Indexed8);
     QVector<QRgb> color_table;
-    color_table << qRgb(0, 255, 0);
-    for (int i = 1; i < 255; i++) { color_table << qRgb(i, i, i); }
+    color_table << qRgb(0, 255, 0) << qRgb(0, 255, 0);
+    for (int i = 2; i < 169; i++) { color_table << qRgb(i, i, i); }
+    // the camera bleeds at ~ 180, so I set a guard here. when adjusting light keep the blue circle small.
+    color_table << qRgb(0, 0, 255);
+    for (int i = 170; i < 255; i++) { color_table << qRgb(i, i, i); }
     color_table << qRgb(255, 0, 0);
     image.setColorTable(color_table);
     const quint16 *const image_in_data = image_in.constData();
@@ -75,6 +127,11 @@ QImage OnlineProcessor::drawBufferFromRaw(const ImageArray image_in) {
         qDebug() << "write on picture";
         QImageWriter file(file_path, "png");
         file.setQuality(1);
+        // change the image back to no saturation coloring
+        color_table[0] = qRgb(0, 0, 0);
+        color_table[1] = qRgb(1, 1, 1);
+        color_table[169] = qRgb(169, 169, 169);
+        image.setColorTable(color_table);
         file.write(image);
         take_next_picture = false;
     }
@@ -86,21 +143,35 @@ void OnlineProcessor::processFrame(const ImageArray image_in, const double phase
     double coef_imag = qSin(phase);
     int length = image_in.length();
     for (int i = 0; i < length; i++) {
-        imag[i] -= coef_imag * image_in.at(i);
-        real[i] += coef_real * image_in.at(i);
+        quint16 pixel = image_in.at(i);
+        imag[i] -= coef_imag * pixel;
+        real[i] += coef_real * pixel;
+        ave[i] += pixel;
     }
 }
 
 QImage OnlineProcessor::drawBufferFromDFT() {
     QImage image(roi->getSize(), QImage::Format_ARGB32);
     int length = real.length();
-    std::pair<const double *, const double *> minmax_real = std::minmax_element(real.constBegin(), real.constEnd());
-    std::pair<const double *, const double *> minmax_imag = std::minmax_element(imag.constBegin(), imag.constEnd());
-    double max_real = std::max<double>(std::abs(*(minmax_real.first)), std::abs(*(minmax_real.second)));
-    double max_imag = std::max<double>(std::abs(*(minmax_imag.first)), std::abs(*(minmax_imag.second)));
-    double normalizer = std::max<double>(max_real / qSqrt(3), max_imag) / 255.0;
-    uchar *image_data = image.bits();
-    for (int i = 0; i < length; i++) { complex2rgb(real.at(i) / normalizer, imag.at(i) / normalizer, image_data + i * 4); }
+    double max_power = 0;
+    DoubleArray power, angle;
+    power.resize(real.size());
+    angle.resize(real.size());
+    for (int i = 0; i < length; i++) {
+        power[i] = sqrt(real.at(i) * real.at(i));
+        if (power.at(i) > max_power) max_power = power.at(i);
+        angle[i] = (std::atan2(real.at(i), imag.at(i)) * M_1_PI + 1) * 180;
+    }
+    max_power = max_power / 255.0;
+    int height = image.height();
+    int width = image.width();
+    for (int j = 0; j < height; j++) {
+        uchar *image_data = image.scanLine(j);
+        for (int i = 0; i < width; i++) {
+            int location = j * width + i;
+            polar2rgb(angle.at(location), uchar(power.at(location) / max_power), image_data + i * 4);
+        }
+    }
     return image;
 }
 
@@ -110,18 +181,21 @@ void OnlineProcessor::startRecording() {
     roi->lock();
     real.resize(roi->length());
     imag.resize(roi->length());
+    ave.resize(roi->length());
     // clear all the arrays
     real.fill(0);
     imag.fill(0);
+    ave.fill(0);
     diode_signal.clear();
     diode_timestamp.clear();
     camera_expose_computer_time.clear();
     camera_expose_timestamp.clear();
+    camera_phase.clear();
     // calculate coefficients for phase calculation
-    phase_per_pulse = (M_PI * 2 * frames_per_pulse) / params->getPeriodInFrames();
+    phase_per_pulse = (M_PI * 2 * params->getFramePerPulse()) / params->getPeriodInFrames();
     phase_per_ms = (M_PI * 2) / (params->getPeriodInSeconds() * 1000);
     phase_exposure_offset = - (phase_per_ms * params->getExposureTime() / 2);
-    pulse_per_cycle = params->getCycleNo() / frames_per_pulse;
+    pulse_per_cycle = params->getPeriodInFrames() / params->getFramePerPulse();
 }
 
 void OnlineProcessor::stopRecording() {
@@ -132,6 +206,10 @@ void OnlineProcessor::stopRecording() {
     emit(saveIntSeries(diode_timestamp, "diode_nidaq_time"));
     emit(saveIntSeries(camera_expose_timestamp, "readout_nidaq_time"));
     emit(saveIntSeries(camera_expose_computer_time, "readout_computer_time"));
+    emit(saveDoubleSeries(camera_phase, "cam_phase"));
+    emit(saveDoubleSeries(real, "online_real"));
+    emit(saveDoubleSeries(imag, "online_imag"));
+    emit(saveDoubleSeries(ave, "online_ave"));
     emit(finishSaving());
     emit(reportRemainingTime(0));
 }
@@ -139,31 +217,4 @@ void OnlineProcessor::stopRecording() {
 void OnlineProcessor::takePicture(QString file_path_in) {
     file_path = file_path_in;
     take_next_picture = true;
-}
-
-void OnlineProcessor::complex2rgb(double real_element, double imag_element, uchar *argb_ptr) {
-    static const double tan30 = 1.0f / qSqrt(3);
-    argb_ptr[0] = 0xff;
-    double real_projection = tan30 * real_element;
-    if (real_element > 0) {
-        if (imag_element < 0 && imag_element < -real_projection) {
-            argb_ptr[1] = quint8(-real_projection - imag_element);
-            argb_ptr[2] = 0;
-            argb_ptr[3] = quint8(real_projection - imag_element);
-        } else {
-            argb_ptr[1] = 0;
-            argb_ptr[2] = quint8(real_projection + imag_element);
-            argb_ptr[3] = quint8(real_projection * 2);
-        }
-    } else {
-        if (imag_element < 0 && imag_element < real_projection) {
-            argb_ptr[1] = quint8(-real_projection - imag_element);
-            argb_ptr[2] = 0;
-            argb_ptr[3] = quint8(real_projection - imag_element);
-        } else {
-            argb_ptr[1] = quint8(-2 * real_projection);
-            argb_ptr[2] = quint8(imag_element - real_projection);
-            argb_ptr[3] = 0;
-        }
-    }
 }

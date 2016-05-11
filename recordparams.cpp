@@ -4,10 +4,21 @@
 #include "recordparams.h"
 
 RecordParams::RecordParams()
-    : period_in_frames(900), period_in_seconds(12), cycle_no(20), is_locked(false), exposure_time(40) {
-    QDir file_folder(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+    : period_in_frames(900), period_in_seconds(12), cycle_no(20), is_locked(false), exposure_time(30),
+    frame_per_pulse(6){
+    QDir file_folder(QStandardPaths::writableLocation(QStandardPaths::HomeLocation));
     file_path = file_folder.filePath("Data.h5");
 }
+int RecordParams::getFramePerPulse() const
+{
+    return frame_per_pulse;
+}
+
+void RecordParams::setFramePerPulse(int value)
+{
+    frame_per_pulse = value;
+}
+
 int RecordParams::getExposureTime() const {
     return exposure_time;
 }

@@ -142,6 +142,7 @@ void MainWindow::on_recordButton_released() {
     params->setPeriodInSeconds(ui->periodSpinInS->value());
     params->setCycleNo(ui->cycleNoSpin->value());
     params->setFilePath(ui->filePathEdit->text());
+    params->setFramePerPulse(ui->framePerPulse->value());
     params->lock();
     qDebug() << "recordparams locked";
     startRecording();

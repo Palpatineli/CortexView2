@@ -42,6 +42,7 @@ unix: INCLUDEPATH += "/usr/include/hdf5/serial"
 win32:INCLUDEPATH += "C:\Program Files (x86)\National Instruments\Shared\ExternalCompilerSupport\C\include"
 win32:INCLUDEPATH += "C:\Program Files\Photometrics\PvcamSDK\Inc"
 win32:INCLUDEPATH += "C:\Program Files\HDF_Group\HDF5\1.8.15\include"
+win32:INCLUDEPATH += "C:\Program Files (x86)\GnuWin32\include"
 
 unix: LIBS += "/usr/lib/x86_64-linux-gnu/libhdf5_serial.so"
 unix: LIBS += "/usr/lib/x86_64-linux-gnu/libhdf5_serial_hl.so"
@@ -49,6 +50,7 @@ win32:LIBS += "C:\Program Files (x86)\National Instruments\Shared\ExternalCompil
 win32:LIBS += "C:\Program Files\Photometrics\PvcamSDK\Lib\AMD64\pvcam64.lib"
 win32:LIBS += "C:\Program Files\HDF_Group\HDF5\1.8.15\lib\hdf5.lib"
 win32:LIBS += "C:\Program Files\HDF_Group\HDF5\1.8.15\lib\hdf5_hl.lib"
+win32:LIBS += "C:\Program Files (x86)\GnuWin32\lib\libtiff.lib"
 
 DISTFILES += \
     README.txt

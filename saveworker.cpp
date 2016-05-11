@@ -31,6 +31,8 @@ void SaveWorker::start() {
     H5LTset_attribute_int(hFile, "/", "cycle_no", &cycle_no, 1);
     int exposure_time = params->getExposureTime();
     H5LTset_attribute_int(hFile, "/", "exposure_time", &exposure_time, 1);
+    int frame_per_pulse = params->getFramePerPulse();
+    H5LTset_attribute_int(hFile, "/", "frame_per_pulse", &frame_per_pulse, 1);
 
     QRect rect = roi->getROI();
     QPoint bins = roi->getBins();
